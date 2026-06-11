@@ -125,21 +125,6 @@ h1, h2, h3, h4 {
   to { opacity: 1; transform: none; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  /* Honor the preference — no spatial rise — but still play a gentle,
-     staggered opacity settle so the load reads as intentional rather than a
-     hard pop. Opacity-only motion is reduced-motion-safe. The class-specific
-     !important beats the global 150ms cap below so the fade stays perceptible. */
-  .line-inner,
-  .load-rise {
-    transform: none !important;
-    animation: soft-fade 600ms var(--ease-out) both !important;
-  }
-}
-@keyframes soft-fade {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
 
 /* elevation on hover — dark theme lifts via lightness, never glow shadows */
 @media (hover: hover) and (pointer: fine) {
@@ -181,13 +166,12 @@ h1, h2, h3, h4 {
   50% { opacity: 0; }
 }
 
+/* Reduced-motion policy: this site's load + scroll-reveal motion is brief,
+   one-shot, and opacity-led, so it intentionally plays regardless of the OS
+   setting (many machines have "animation effects" off without the user
+   realizing it gates web motion). Only genuinely *perpetual* motion is stilled
+   for reduced-motion users — the looping nav caret, and the hero curve's draw
+   (handled in HeroCurve.tsx, which renders the final curve at rest). */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 150ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 150ms !important;
-  }
-  .reveal { animation: reveal-reduced 150ms linear forwards; }
-  @keyframes reveal-reduced { to { opacity: 1; transform: none; } }
   .caret-blink { animation: none; opacity: 1; }
 }

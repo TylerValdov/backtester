@@ -1,15 +1,14 @@
 "use client";
 
-// Landing-page hero canvas: an equity curve that draws itself across the fold,
-// then keeps ticking like a live feed — benchmark ghosted underneath, with a
-// mono readout of both running returns. Functional motion: it demonstrates the
-// product's output. prefers-reduced-motion renders the finished curve, static.
+// Landing-page hero canvas: an equity curve that draws itself across the fold
+// once on load, benchmark ghosted underneath, then settles and stays still — a
+// single demonstrative moment, not a perpetual ticker. A mono readout of both
+// final returns sits in the corner once the draw completes.
 
 import { useEffect, useRef } from "react";
 
 const N = 480;
-const DRAW_MS = 2600;
-const TICK_MS = 480; // cadence of the live extension after the draw completes
+const DRAW_MS = 2400;
 
 export function HeroCurve() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -22,8 +21,7 @@ export function HeroCurve() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // deterministic LCG so the initial draw is identical on every visit;
-    // the live extension continues the same stream
+    // deterministic LCG so the curve is identical on every visit
     let seedA = 42;
     let seedB = 7;
     const randA = () => ((seedA = (seedA * 1664525 + 1013904223) % 4294967296) / 4294967296) * 2 - 1;
@@ -35,20 +33,16 @@ export function HeroCurve() {
       strategy.push(strategy[i - 1] * (1 + 0.0014 + randA() * 0.018));
       benchmark.push(benchmark[i - 1] * (1 + 0.0006 + randB() * 0.012));
     }
-    // baselines for the % readout (index 0 of the visible window drifts as we scroll)
-    const strat0 = strategy[0];
-    const bench0 = benchmark[0];
 
-    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const css = getComputedStyle(document.documentElement);
     const colAccent = css.getPropertyValue("--color-accent").trim() || "#7adfe8";
     const colNeutral = css.getPropertyValue("--color-neutral").trim() || "#6b7686";
     const colRule = css.getPropertyValue("--color-rule-soft").trim() || "#262c38";
 
-    function updateReadout() {
+    function setReadout() {
       if (!readout) return;
-      const s = (strategy[strategy.length - 1] / strat0 - 1) * 100;
-      const b = (benchmark[benchmark.length - 1] / bench0 - 1) * 100;
+      const s = (strategy[N - 1] / strategy[0] - 1) * 100;
+      const b = (benchmark[N - 1] / benchmark[0] - 1) * 100;
       readout.textContent = `sim · strategy ${s >= 0 ? "+" : ""}${s.toFixed(1)}% · spy ${b >= 0 ? "+" : ""}${b.toFixed(1)}%`;
     }
 
@@ -63,11 +57,10 @@ export function HeroCurve() {
       ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx!.clearRect(0, 0, w, h);
 
-      const n = strategy.length;
       const all = [...strategy, ...benchmark];
       const lo = Math.min(...all);
       const hi = Math.max(...all);
-      const x = (i: number) => (i / (n - 1)) * w;
+      const x = (i: number) => (i / (N - 1)) * w;
       const y = (v: number) => h - ((v - lo) / (hi - lo)) * (h * 0.82) - h * 0.06;
 
       // faint horizontal grid — the instrument backdrop
@@ -81,7 +74,8 @@ export function HeroCurve() {
         ctx!.stroke();
       }
 
-      const upto = Math.max(2, Math.floor(n * progress));
+      const upto = Math.max(2, Math.floor(N * progress));
+      const lastI = upto - 1;
 
       // benchmark, ghosted
       ctx!.strokeStyle = colNeutral;
@@ -93,7 +87,6 @@ export function HeroCurve() {
       ctx!.globalAlpha = 1;
 
       // strategy — soft underglow fill, then the line
-      const lastI = upto - 1;
       ctx!.fillStyle = colAccent;
       ctx!.globalAlpha = 0.05;
       ctx!.beginPath();
@@ -110,30 +103,24 @@ export function HeroCurve() {
       for (let i = 0; i < upto; i++) (i === 0 ? ctx!.moveTo : ctx!.lineTo).call(ctx!, x(i), y(strategy[i]));
       ctx!.stroke();
 
-      // leading dot
-      ctx!.fillStyle = colAccent;
-      ctx!.beginPath();
-      ctx!.arc(x(lastI), y(strategy[lastI]), 2.5, 0, Math.PI * 2);
-      ctx!.fill();
+      // leading dot only while drawing; gone once settled
+      if (progress < 1) {
+        ctx!.fillStyle = colAccent;
+        ctx!.beginPath();
+        ctx!.arc(x(lastI), y(strategy[lastI]), 2.5, 0, Math.PI * 2);
+        ctx!.fill();
+      }
     }
 
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     let raf = 0;
-    let timer: ReturnType<typeof setInterval> | undefined;
     let start: number | null = null;
 
-    function tickLive() {
-      // slide the window: drop the oldest point, append the next from the stream
-      strategy.push(strategy[strategy.length - 1] * (1 + 0.0014 + randA() * 0.018));
-      benchmark.push(benchmark[benchmark.length - 1] * (1 + 0.0006 + randB() * 0.012));
-      strategy.shift();
-      benchmark.shift();
-      raf = requestAnimationFrame(() => paint(1));
-      updateReadout();
-    }
-
     if (reduced) {
+      // honor the preference for the larger canvas motion: render the final
+      // curve at rest (the brief text entrance still plays — see globals.css)
       paint(1);
-      updateReadout();
+      setReadout();
     } else {
       const frame = (ts: number) => {
         if (start === null) start = ts;
@@ -142,20 +129,16 @@ export function HeroCurve() {
         if (p < 1) {
           raf = requestAnimationFrame(frame);
         } else {
-          updateReadout();
-          timer = setInterval(tickLive, TICK_MS); // the curve stays alive
+          setReadout(); // draw done — settle, no further motion
         }
       };
       raf = requestAnimationFrame(frame);
     }
 
-    // hidden tabs are throttled by the browser; no manual pause needed
     const onResize = () => paint(1);
     window.addEventListener("resize", onResize);
-
     return () => {
       cancelAnimationFrame(raf);
-      if (timer) clearInterval(timer);
       window.removeEventListener("resize", onResize);
     };
   }, []);
