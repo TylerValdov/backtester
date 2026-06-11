@@ -14,9 +14,17 @@ class Settings(BaseSettings):
     # database in production. OHLCV access is isolated in app/data/.
     database_url: str = "sqlite:///./backtester.db"
 
-    # PLACEHOLDER[MARKET DATA API]: "synthetic" | "polygon" | "alpaca" | "yahoo"
+    # Market data: "synthetic" | "alpaca" | "polygon" | "yahoo"
     market_data_provider: str = "synthetic"
-    market_data_api_key: str = ""
+    market_data_api_key: str = ""  # used by the (stub) Polygon path
+
+    # Alpaca market data (https://data.alpaca.markets). The free "Basic" plan
+    # serves IEX-feed daily bars; SIP (full-market) requires a paid plan.
+    alpaca_api_key: str = ""
+    alpaca_secret_key: str = ""
+    alpaca_feed: str = "iex"  # "iex" (free) | "sip" (paid)
+    # Earliest date AlpacaProvider tries to backfill per symbol.
+    alpaca_history_start: str = "2015-01-01"
 
     # PLACEHOLDER[ML INFERENCE ENDPOINT]
     ml_inference_url: str = ""
@@ -24,8 +32,8 @@ class Settings(BaseSettings):
     # PLACEHOLDER[CELERY+REDIS]
     celery_broker_url: str = ""
 
-    # PLACEHOLDER[EMAIL SERVICE]
-    email_api_key: str = ""
+    # Email — Resend (https://resend.com). Unset = links logged to console.
+    resend_api_key: str = ""
     email_from: str = "research@backtester.local"
 
     # PLACEHOLDER[GOOGLE OAUTH]

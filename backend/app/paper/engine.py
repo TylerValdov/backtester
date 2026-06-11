@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 
-from ..data import SimulatedFeed, get_provider
+from ..data import get_live_feed, get_provider
 from ..db import SessionLocal
 from ..models import PaperOrder, PaperPosition, PaperSession, StrategyVersion
 from ..risk import SlippageConfig, apply_slippage
@@ -50,7 +50,8 @@ class _Runtime:
 
 class PaperEngine:
     def __init__(self) -> None:
-        self.feed = SimulatedFeed()
+        # Real Alpaca prices when configured, else the synthetic walk.
+        self.feed = get_live_feed()
         self.sessions: dict[str, _Runtime] = {}
         self._task: asyncio.Task | None = None
 

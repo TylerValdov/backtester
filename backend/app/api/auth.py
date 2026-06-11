@@ -52,14 +52,24 @@ def signup(body: SignupIn, db: Session = Depends(get_db)):
 
     confirm_token = create_token(user.id, purpose="confirm", ttl_hours=48)
     confirm_url = f"{settings.frontend_origin}/confirm?token={confirm_token}"
-    sent = send_email(
-        user.email,
-        "Confirm your Backtester account",
-        f'<p>Confirm your account to start running backtests:</p><p><a href="{confirm_url}">{confirm_url}</a></p>',
+    html = (
+        "<div style=\"font-family:system-ui,sans-serif;max-width:480px\">"
+        "<h2>Confirm your Backtester account</h2>"
+        "<p>You're one click from running backtests and paper trading.</p>"
+        f'<p><a href="{confirm_url}" '
+        'style="display:inline-block;padding:10px 18px;background:#0b6;color:#fff;'
+        'border-radius:4px;text-decoration:none">Confirm account</a></p>'
+        f'<p style="color:#888;font-size:13px">Or paste this link: {confirm_url}</p>'
+        "</div>"
     )
     out: dict = {"ok": True, "email": user.email}
+    try:
+        sent = send_email(user.email, "Confirm your Backtester account", html)
+    except Exception:
+        # Provider rejected (e.g. unverified domain / sandbox recipient). The
+        # account exists; hand back the link so the flow still completes.
+        sent = False
     if not sent:
-        # No email provider configured (dev): hand the link back so the flow stays testable.
         out["dev_confirmation_url"] = confirm_url
     return out
 
