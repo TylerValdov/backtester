@@ -126,11 +126,19 @@ h1, h2, h3, h4 {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* Honor the preference — no spatial rise — but still play a gentle,
+     staggered opacity settle so the load reads as intentional rather than a
+     hard pop. Opacity-only motion is reduced-motion-safe. The class-specific
+     !important beats the global 150ms cap below so the fade stays perceptible. */
   .line-inner,
   .load-rise {
-    animation: load-rise 150ms linear forwards;
-    transform: none;
+    transform: none !important;
+    animation: soft-fade 600ms var(--ease-out) both !important;
   }
+}
+@keyframes soft-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 /* elevation on hover — dark theme lifts via lightness, never glow shadows */
