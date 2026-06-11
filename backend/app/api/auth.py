@@ -34,7 +34,7 @@ def _set_session(response: Response, user_id: str) -> None:
         samesite="lax",
         max_age=settings.session_ttl_hours * 3600,
         path="/",
-        # secure=True in production behind HTTPS
+        secure=settings.cookie_secure,  # HTTPS-only in prod; set COOKIE_SECURE=true
     )
 
 

@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     frontend_origin: str = "http://localhost:3000"
 
     session_ttl_hours: int = 24 * 7
+    # Mark the session cookie Secure (HTTPS-only). Keep False for localhost dev;
+    # set COOKIE_SECURE=true in production behind HTTPS.
+    cookie_secure: bool = False
 
     # Plan limits (Free tier). Pro/Quant lift these — see app/api/deps.py.
     free_max_strategies: int = 2
