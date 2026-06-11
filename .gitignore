@@ -1,0 +1,9 @@
+.venv/
+CLAUDE.md
+__pycache__/
+*.pyc
+backend/.env
+backend/backtester.db
+backend/models/*.pkl
+.pytest_cache/
+/*.png

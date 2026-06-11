@@ -1,0 +1,77 @@
+/* Hallmark · genre: atmospheric · macrostructure: Marquee Hero · theme: custom
+ * vibe: "research-grade quant terminal, dark, precise, calm"
+ * paper oklch(13% 0.01 240) · accent oklch(80% 0.13 195) instrument-cyan
+ * display Geist 600 · body Geist 400 · outlier Geist Mono (data role)
+ * axes: dark / grotesk-sans / cool · nav: N8 terminal · footer: Ft4 colophon
+ * enrichment: Tier-A canvas equity curve · studied: no
+ * pre-emit critique: P4 H4 E4 S4 R5 V4
+ */
+
+:root {
+  /* ── color · cool slate anchor (hue 240), one cyan accent ─────────────── */
+  --color-paper:    oklch(13% 0.012 240);
+  --color-paper-2:  oklch(16% 0.013 240);
+  --color-paper-3:  oklch(19.5% 0.014 240);
+  --color-rule:     oklch(27% 0.014 240);
+  --color-rule-soft:oklch(21% 0.013 240);
+  --color-neutral:  oklch(58% 0.018 240);
+  --color-muted:    oklch(72% 0.014 240);
+  --color-ink:      oklch(93% 0.008 240);
+  --color-accent:   oklch(80% 0.13 195);
+  --color-accent-dim: oklch(60% 0.09 195);
+  --color-focus:    oklch(80% 0.13 195);
+
+  /* semantic market colors — data only, never decoration */
+  --color-up:       oklch(72% 0.15 155);
+  --color-down:     oklch(66% 0.19 25);
+  --color-warn:     oklch(78% 0.13 85);
+
+  /* ── type ──────────────────────────────────────────────────────────────── */
+  --font-display: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-body:    var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono:    var(--font-geist-mono), ui-monospace, "JetBrains Mono", monospace;
+
+  --text-xs:   0.75rem;
+  --text-sm:   0.8125rem;
+  --text-base: 1rem;
+  --text-md:   1.25rem;
+  --text-lg:   1.5625rem;
+  --text-xl:   1.953rem;
+  --text-2xl:  2.441rem;
+  --text-3xl:  3.052rem;
+  --text-display-s: clamp(2rem, 3.2vw + 1rem, 3.4rem);
+  --text-display:   clamp(2.75rem, 5vw + 1rem, 5.25rem);
+
+  /* ── space · 4pt ───────────────────────────────────────────────────────── */
+  --space-3xs: 0.125rem;
+  --space-2xs: 0.25rem;
+  --space-xs:  0.5rem;
+  --space-sm:  0.75rem;
+  --space-md:  1rem;
+  --space-lg:  1.5rem;
+  --space-xl:  2.5rem;
+  --space-2xl: 4rem;
+  --space-3xl: 6rem;
+  --space-4xl: 9rem;
+  --page-gutter: clamp(1rem, 4vw, 2.5rem);
+
+  /* ── motion (Emil: exponential ease-out, ≤300ms UI) ───────────────────── */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in:  cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-micro: 120ms;
+  --dur-short: 200ms;
+  --dur-long:  420ms;
+
+  /* ── misc ─────────────────────────────────────────────────────────────── */
+  --rule-hair: 1px;
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --z-base: 1;
+  --z-raised: 10;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-modal: 400;
+  --z-toast: 500;
+  --z-tooltip: 600;
+}
