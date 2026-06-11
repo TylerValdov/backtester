@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { HeroCurve } from "@/components/charts/HeroCurve";
+import { CountUp } from "@/components/CountUp";
 import { ScrollReveal } from "@/components/ScrollReveal";
 import { TerminalNav } from "@/components/TerminalNav";
 
@@ -15,27 +16,48 @@ export default function Landing() {
       <TerminalNav />
 
       {/* ── fold ─────────────────────────────────────────────────────────── */}
-      <section className="relative flex min-h-[78svh] flex-col justify-end overflow-hidden border-b-2 border-[var(--color-rule)]">
+      {/* Orchestrated load: status eyebrow → headline lines mask up one beat at
+          a time → lede → CTAs → stat strip counts. The curve draws behind it
+          all over ~2.6s, then keeps ticking. Reduced-motion collapses every
+          spatial step to a fast fade. */}
+      <section className="relative flex min-h-[82svh] flex-col justify-end overflow-hidden border-b-2 border-[var(--color-rule)]">
         <div className="absolute inset-0">
           <HeroCurve />
         </div>
-        <div className="relative max-w-[60rem] px-[var(--page-gutter)] pb-[var(--space-2xl)] pt-[var(--space-3xl)]">
-          <h1
-            className="reveal text-[var(--color-ink)]"
-            style={{ fontSize: "var(--text-display)", letterSpacing: "-0.03em", lineHeight: 1.04, overflowWrap: "anywhere", minWidth: 0 }}
+        <div className="relative max-w-[64rem] px-[var(--page-gutter)] pb-[var(--space-2xl)] pt-[var(--space-3xl)]">
+          <p
+            className="load-rise mb-6 flex items-center gap-2 text-[11px] uppercase tracking-[0.14em] text-[var(--color-neutral)]"
+            style={{ fontFamily: "var(--font-mono)" }}
           >
-            Test the signal.
-            <br />
-            Then trade it.
-          </h1>
-          <p className="reveal mt-5 max-w-[44ch] text-[var(--color-muted)]" style={{ "--i": 1 } as React.CSSProperties}>
-            A research environment for one quant: you. Write a signal, run it against a decade
-            of daily bars, and paper trade it live — without a terminal subscription.
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-[var(--color-up)]" />
+            engine online — synthetic feed, 31 instruments
           </p>
-          <div className="reveal mt-7 flex flex-wrap items-center gap-4" style={{ "--i": 2 } as React.CSSProperties}>
+
+          <h1
+            className="text-[var(--color-ink)]"
+            style={{ fontSize: "var(--text-display)", letterSpacing: "-0.035em", lineHeight: 1.0, overflowWrap: "anywhere", minWidth: 0 }}
+          >
+            <span className="line-mask" style={{ "--i": 1 } as React.CSSProperties}>
+              <span className="line-inner">Write the signal.</span>
+            </span>
+            <span className="line-mask" style={{ "--i": 2 } as React.CSSProperties}>
+              <span className="line-inner">Test a decade.</span>
+            </span>
+            <span className="line-mask" style={{ "--i": 3 } as React.CSSProperties}>
+              <span className="line-inner text-[var(--color-accent)]">Trade it live.</span>
+            </span>
+          </h1>
+
+          <p className="load-rise mt-6 max-w-[46ch] text-[var(--text-md)] leading-relaxed text-[var(--color-muted)]" style={{ "--i": 4 } as React.CSSProperties}>
+            A research environment for one quant: you. Nine signals, a custom
+            Python hook, honest slippage, and a live paper book — no Bloomberg
+            terminal, no Quantopian shutdown grief.
+          </p>
+
+          <div className="load-rise mt-8 flex flex-wrap items-center gap-4" style={{ "--i": 5 } as React.CSSProperties}>
             <Link
               href="/signup"
-              className="press inline-flex min-h-10 items-center rounded-[3px] bg-[var(--color-accent)] px-5 text-sm font-medium text-[var(--color-paper)] hover:bg-[var(--color-ink)]"
+              className="press inline-flex min-h-11 items-center rounded-[3px] bg-[var(--color-accent)] px-6 text-sm font-medium text-[var(--color-paper)] hover:bg-[var(--color-ink)]"
             >
               Start testing
             </Link>
@@ -46,6 +68,22 @@ export default function Landing() {
               Sign in <span className="arrow">→</span>
             </Link>
           </div>
+
+          <dl
+            className="load-rise mt-10 flex flex-wrap gap-x-10 gap-y-4 border-t border-[var(--color-rule-soft)] pt-6"
+            style={{ "--i": 6 } as React.CSSProperties}
+          >
+            {[
+              { value: <CountUp to={9} delayMs={820} />, label: "built-in signals" },
+              { value: <CountUp to={16} delayMs={920} suffix="yr" />, label: "of daily bars" },
+              { value: <CountUp to={31} delayMs={1020} />, label: "instruments + SPY" },
+            ].map((s, i) => (
+              <div key={i} className="flex flex-col gap-0.5">
+                <dd className="text-[var(--text-xl)] leading-none text-[var(--color-ink)]">{s.value}</dd>
+                <dt className="text-[11px] uppercase tracking-[0.1em] text-[var(--color-neutral)]">{s.label}</dt>
+              </div>
+            ))}
+          </dl>
         </div>
       </section>
 
