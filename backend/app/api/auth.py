@@ -156,7 +156,7 @@ def google_callback(code: str, db: Session = Depends(get_db)):
         user.confirmed = True
     db.commit()
     # Land the user in the app with the session cookie attached.
-    redirect = RedirectResponse(f"{settings.frontend_origin}/dashboard", status_code=303)
+    redirect = RedirectResponse(f"{settings.frontend_origin}/build", status_code=303)
     _set_session(redirect, user.id)
     return redirect
 

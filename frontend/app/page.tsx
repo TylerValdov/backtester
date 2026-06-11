@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { HeroCurve } from "@/components/charts/HeroCurve";
+import { ScrollReveal } from "@/components/ScrollReveal";
 import { TerminalNav } from "@/components/TerminalNav";
 
 // Macrostructure: Marquee Hero — the fold is one declarative statement over a
-// live equity-curve canvas. Below the fold: step sequence → spec sheet →
-// signal catalog → single CTA → dense colophon.
+// live equity-curve canvas that keeps ticking after it draws. Below the fold:
+// step sequence → spec sheet → signal catalog → single CTA → dense colophon.
+// Motion discipline (Emil): one entrance per section, reveal-once, elevation
+// via lightness on dark, exits faster than enters, reduced-motion respected.
 
 export default function Landing() {
   return (
@@ -38,9 +41,9 @@ export default function Landing() {
             </Link>
             <Link
               href="/login"
-              className="text-sm text-[var(--color-muted)] underline underline-offset-4 hover:text-[var(--color-ink)]"
+              className="arrow-link text-sm text-[var(--color-muted)] underline underline-offset-4 hover:text-[var(--color-ink)]"
             >
-              Sign in →
+              Sign in <span className="arrow">→</span>
             </Link>
           </div>
         </div>
@@ -65,14 +68,16 @@ export default function Landing() {
               title: "Paper trade it live",
               body: "Point the same version at the live feed. Positions, fills, and P&L stream over a WebSocket into the dashboard — watch the strategy breathe before any real money does.",
             },
-          ].map((s) => (
-            <div key={s.n} className="flex flex-col gap-2">
-              <span className="tnum text-sm text-[var(--color-accent)]" style={{ fontFamily: "var(--font-mono)" }}>
-                {s.n}
-              </span>
-              <h2 className="text-[var(--text-md)]">{s.title}</h2>
-              <p className="text-sm leading-relaxed text-[var(--color-neutral)]">{s.body}</p>
-            </div>
+          ].map((s, i) => (
+            <ScrollReveal key={s.n} index={i}>
+              <div className="flex flex-col gap-2">
+                <span className="tnum text-sm text-[var(--color-accent)]" style={{ fontFamily: "var(--font-mono)" }}>
+                  {s.n}
+                </span>
+                <h2 className="text-[var(--text-md)]">{s.title}</h2>
+                <p className="text-sm leading-relaxed text-[var(--color-neutral)]">{s.body}</p>
+              </div>
+            </ScrollReveal>
           ))}
         </div>
       </section>
@@ -80,37 +85,43 @@ export default function Landing() {
       {/* ── spec sheet · what the engine actually computes ───────────────── */}
       <section className="border-t border-[var(--color-rule-soft)] px-[var(--page-gutter)] py-[var(--space-2xl)]">
         <div className="grid max-w-[72rem] gap-[var(--space-xl)] lg:grid-cols-[0.8fr_1.2fr]">
-          <h2 className="max-w-[18ch] text-[var(--text-xl)]">Every run returns the numbers that matter.</h2>
-          <dl className="tnum divide-y divide-[var(--color-rule-soft)] text-sm" style={{ fontFamily: "var(--font-mono)" }}>
-            {[
-              ["sharpe · sortino", "annualized, 252-day convention, downside deviation for Sortino"],
-              ["max drawdown", "peak-to-trough, plus every underwater period charted"],
-              ["cagr · volatility", "geometric growth and annualized σ, vs SPY on the same axis"],
-              ["win rate · holding period", "FIFO-paired trades with per-trade P&L in the log"],
-              ["slippage breakdown", "fixed + basis-point + √impact components, itemized"],
-              ["alpha · beta", "OLS against the benchmark return series"],
-              ["rolling sharpe", "63-day window, charted across the whole test"],
-            ].map(([k, v]) => (
-              <div key={k} className="grid gap-1 py-2.5 sm:grid-cols-[14rem_1fr]">
-                <dt className="text-[var(--color-accent)]">{k}</dt>
-                <dd className="text-[var(--color-neutral)]" style={{ fontFamily: "var(--font-body)" }}>
-                  {v}
-                </dd>
-              </div>
-            ))}
-          </dl>
+          <ScrollReveal>
+            <h2 className="max-w-[18ch] text-[var(--text-xl)]">Every run returns the numbers that matter.</h2>
+          </ScrollReveal>
+          <ScrollReveal index={1}>
+            <dl className="tnum divide-y divide-[var(--color-rule-soft)] text-sm" style={{ fontFamily: "var(--font-mono)" }}>
+              {[
+                ["sharpe · sortino", "annualized, 252-day convention, downside deviation for Sortino"],
+                ["max drawdown", "peak-to-trough, plus every underwater period charted"],
+                ["cagr · volatility", "geometric growth and annualized σ, vs SPY on the same axis"],
+                ["win rate · holding period", "FIFO-paired trades with per-trade P&L in the log"],
+                ["slippage breakdown", "fixed + basis-point + √impact components, itemized"],
+                ["alpha · beta", "OLS against the benchmark return series"],
+                ["rolling sharpe", "63-day window, charted across the whole test"],
+              ].map(([k, v]) => (
+                <div key={k} className="spec-row grid gap-1 px-2 py-2.5 sm:grid-cols-[14rem_1fr]">
+                  <dt className="text-[var(--color-accent)]">{k}</dt>
+                  <dd className="text-[var(--color-neutral)]" style={{ fontFamily: "var(--font-body)" }}>
+                    {v}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </ScrollReveal>
         </div>
       </section>
 
       {/* ── signal categories ────────────────────────────────────────────── */}
       <section id="signals" className="border-t border-[var(--color-rule-soft)] px-[var(--page-gutter)] py-[var(--space-2xl)]">
         <div className="max-w-[72rem]">
-          <h2 className="text-[var(--text-xl)]">Three families, one contract.</h2>
-          <p className="mt-2 max-w-[52ch] text-sm text-[var(--color-neutral)]">
-            A signal is a function from prices to conviction. Everything downstream — sizing,
-            rebalancing, costs — is shared, so families compare on equal footing.
-          </p>
-          <div className="mt-8 grid gap-px overflow-hidden rounded-[6px] border border-[var(--color-rule-soft)] bg-[var(--color-rule-soft)] md:grid-cols-3">
+          <ScrollReveal>
+            <h2 className="text-[var(--text-xl)]">Three families, one contract.</h2>
+            <p className="mt-2 max-w-[52ch] text-sm text-[var(--color-neutral)]">
+              A signal is a function from prices to conviction. Everything downstream — sizing,
+              rebalancing, costs — is shared, so families compare on equal footing.
+            </p>
+          </ScrollReveal>
+          <div className="mt-8 grid gap-3 md:grid-cols-3">
             {[
               {
                 tag: "momentum",
@@ -124,17 +135,19 @@ export default function Landing() {
                 tag: "ml-based",
                 items: ["Hosted inference endpoint", "Local sklearn / XGBoost pickle", "Standard feature block: momentum, z-score, realized vol"],
               },
-            ].map((c) => (
-              <div key={c.tag} className="bg-[var(--color-paper-2)] p-5">
-                <h3 className="text-sm uppercase tracking-[0.1em] text-[var(--color-accent)]" style={{ fontFamily: "var(--font-mono)" }}>
-                  {c.tag}
-                </h3>
-                <ul className="mt-3 flex flex-col gap-1.5 text-sm text-[var(--color-muted)]">
-                  {c.items.map((i) => (
-                    <li key={i}>{i}</li>
-                  ))}
-                </ul>
-              </div>
+            ].map((c, i) => (
+              <ScrollReveal key={c.tag} index={i}>
+                <div className="lift h-full rounded-[6px] border border-[var(--color-rule-soft)] bg-[var(--color-paper-2)] p-5">
+                  <h3 className="text-sm uppercase tracking-[0.1em] text-[var(--color-accent)]" style={{ fontFamily: "var(--font-mono)" }}>
+                    {c.tag}
+                  </h3>
+                  <ul className="mt-3 flex flex-col gap-1.5 text-sm text-[var(--color-muted)]">
+                    {c.items.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              </ScrollReveal>
             ))}
           </div>
         </div>
@@ -142,17 +155,19 @@ export default function Landing() {
 
       {/* ── single CTA strip ─────────────────────────────────────────────── */}
       <section className="border-t border-[var(--color-rule-soft)] px-[var(--page-gutter)] py-[var(--space-2xl)]">
-        <div className="flex max-w-[72rem] flex-wrap items-center justify-between gap-5">
-          <p className="max-w-[36ch] text-[var(--text-md)]">
-            Free tier ships with two strategies and two years of history. Enough to find out.
-          </p>
-          <Link
-            href="/signup"
-            className="press inline-flex min-h-10 items-center rounded-[3px] bg-[var(--color-accent)] px-5 text-sm font-medium text-[var(--color-paper)] hover:bg-[var(--color-ink)]"
-          >
-            Create an account
-          </Link>
-        </div>
+        <ScrollReveal>
+          <div className="flex max-w-[72rem] flex-wrap items-center justify-between gap-5">
+            <p className="max-w-[36ch] text-[var(--text-md)]">
+              Free tier ships with two strategies and two years of history. Enough to find out.
+            </p>
+            <Link
+              href="/signup"
+              className="press inline-flex min-h-10 items-center rounded-[3px] bg-[var(--color-accent)] px-5 text-sm font-medium text-[var(--color-paper)] hover:bg-[var(--color-ink)]"
+            >
+              Create an account
+            </Link>
+          </div>
+        </ScrollReveal>
       </section>
 
       {/* ── footer · Ft4 dense colophon ──────────────────────────────────── */}

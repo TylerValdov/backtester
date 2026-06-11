@@ -20,7 +20,7 @@ function LoginForm() {
     setBusy(true);
     try {
       await api.post("/api/auth/login", { email, password });
-      router.replace(params.get("next") ?? "/dashboard");
+      router.replace(params.get("next") ?? "/build");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not reach the server. Is the backend running?");
       setBusy(false);

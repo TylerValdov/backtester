@@ -22,7 +22,7 @@ function ConfirmInner() {
     fired.current = true;
     api
       .post(`/api/auth/confirm?token=${encodeURIComponent(token)}`)
-      .then(() => router.replace("/dashboard"))
+      .then(() => router.replace("/build"))
       .catch((err) => setError(err instanceof ApiError ? err.message : "Confirmation failed."));
   }, [params, router]);
 

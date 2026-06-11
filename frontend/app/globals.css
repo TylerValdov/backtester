@@ -85,6 +85,44 @@ h1, h2, h3, h4 {
   to { opacity: 1; transform: none; }
 }
 
+/* scroll-reveal slots: hidden until IntersectionObserver adds .reveal */
+.pre-reveal {
+  opacity: 0;
+}
+.pre-reveal.reveal {
+  opacity: 0; /* keyframe drives it to 1 */
+}
+
+/* elevation on hover — dark theme lifts via lightness, never glow shadows */
+@media (hover: hover) and (pointer: fine) {
+  .lift {
+    transition: background-color var(--dur-short) var(--ease-out),
+                transform var(--dur-short) var(--ease-out),
+                border-color var(--dur-short) var(--ease-out);
+  }
+  .lift:hover {
+    background-color: var(--color-paper-3);
+    transform: translateY(-2px);
+  }
+
+  /* arrow links: the arrow slides, the text stays */
+  .arrow-link .arrow {
+    display: inline-block;
+    transition: transform var(--dur-micro) var(--ease-out);
+  }
+  .arrow-link:hover .arrow {
+    transform: translateX(3px);
+  }
+
+  /* spec-sheet rows brighten on hover */
+  .spec-row {
+    transition: background-color var(--dur-micro) var(--ease-out);
+  }
+  .spec-row:hover {
+    background-color: var(--color-paper-2);
+  }
+}
+
 .caret-blink {
   display: inline-block;
   width: 1ch;

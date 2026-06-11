@@ -10,8 +10,8 @@ import { api } from "@/lib/api";
 import type { User } from "@/lib/types";
 
 const LINKS = [
-  { href: "/dashboard", label: "paper" },
   { href: "/build", label: "build" },
+  { href: "/dashboard", label: "paper" },
   { href: "/strategies", label: "library" },
   { href: "/backtests", label: "backtests" },
   { href: "/analytics", label: "analytics" },
@@ -37,7 +37,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <header className="sticky top-0 border-b border-[var(--color-rule-soft)] bg-[var(--color-paper)]" style={{ zIndex: "var(--z-sticky)" }}>
         <div className="flex items-center gap-1 px-[var(--page-gutter)]">
           <Link
-            href="/dashboard"
+            href="/build"
             className="mr-3 shrink-0 py-3 text-[13px] text-[var(--color-ink)]"
             style={{ fontFamily: "var(--font-mono)" }}
           >
