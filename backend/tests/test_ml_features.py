@@ -41,7 +41,8 @@ def test_features_use_only_past_data():
     closes2.iloc[250:] *= 1.5  # mutate the future
     panel_b = build_feature_panel(closes2, base_scores=scores)
     t = closes.index[200]
-    for name in ("mom_21", "mom_63", "zscore_20", "rsi_14", "vol_21", "dist_ma200"):
+    for name in ("mom_21", "mom_63", "zscore_20", "rsi_14", "vol_21", "dist_ma200",
+                 "mom_rank", "spy_above_200", "spy_mom_21"):
         a = panel_a[name].loc[t, "AAPL"]
         b = panel_b[name].loc[t, "AAPL"]
         assert (np.isnan(a) and np.isnan(b)) or a == pytest.approx(b), name
