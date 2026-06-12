@@ -10,6 +10,7 @@ import { AppShell } from "@/components/AppShell";
 import { AreaChart } from "@/components/charts/AreaChart";
 import { LineChart } from "@/components/charts/LineChart";
 import { Badge, Button, ErrorNote, Panel, Progress, Spinner, Stat } from "@/components/ui";
+import { FeatureImportance } from "@/components/charts/FeatureImportance";
 import { api, fmtMoney, fmtNum, fmtPct, signed } from "@/lib/api";
 import type { Backtest } from "@/lib/types";
 
@@ -260,6 +261,65 @@ export default function BacktestPage() {
                 )}
               </div>
             </div>
+
+            {r.ml_filter && (
+              <Panel title="ml trade filter">
+                <div className="grid gap-5 lg:grid-cols-[1fr_1fr_1.2fr]">
+                  <div className="flex flex-col gap-3">
+                    <Stat label="Trades taken" value={fmtPct(r.ml_filter.pct_taken, 0)} tone="accent"
+                      sub={`${r.ml_filter.n_candidates} candidates · ${r.ml_filter.model}`} />
+                    <Stat label="Avg return · taken" value={fmtPct(r.ml_filter.avg_return_taken, 2)}
+                      tone={r.ml_filter.avg_return_taken >= 0 ? "up" : "down"} />
+                    <Stat label="Avg return · skipped" value={fmtPct(r.ml_filter.avg_return_skipped, 2)}
+                      tone={r.ml_filter.avg_return_skipped >= 0 ? "up" : "down"}
+                      sub={r.ml_filter.avg_return_taken > r.ml_filter.avg_return_skipped ? "filter skipped the weaker trades" : "filter did not separate winners"} />
+                  </div>
+                  <dl className="tnum flex flex-col gap-2 text-sm" style={{ fontFamily: "var(--font-mono)" }}>
+                    {([["precision", r.ml_filter.metrics.precision], ["recall", r.ml_filter.metrics.recall],
+                       ["accuracy", r.ml_filter.metrics.accuracy], ["auc", r.ml_filter.metrics.auc]] as const).map(([k, v]) => (
+                      <div key={k} className="flex justify-between border-b border-[var(--color-rule-soft)] pb-2">
+                        <dt className="text-[var(--color-neutral)]">{k}</dt>
+                        <dd className="text-[var(--color-ink)]">{v === undefined ? "—" : fmtNum(v, 2)}</dd>
+                      </div>
+                    ))}
+                    <div className="flex justify-between pt-1">
+                      <dt className="text-[var(--color-muted)]">walk-forward folds</dt>
+                      <dd className="text-[var(--color-ink)]">{r.ml_filter.n_folds}</dd>
+                    </div>
+                  </dl>
+                  <div>
+                    <p className="mb-2 text-xs uppercase tracking-[0.1em] text-[var(--color-neutral)]">feature importance</p>
+                    <FeatureImportance importances={r.ml_filter.importances} />
+                  </div>
+                </div>
+              </Panel>
+            )}
+
+            {r.ml_model && (
+              <Panel title="ml model · out-of-sample">
+                <div className="grid gap-5 lg:grid-cols-[1fr_1.2fr]">
+                  <dl className="tnum flex flex-col gap-2 text-sm" style={{ fontFamily: "var(--font-mono)" }}>
+                    <div className="flex justify-between border-b border-[var(--color-rule-soft)] pb-2">
+                      <dt className="text-[var(--color-neutral)]">model</dt><dd className="text-[var(--color-ink)]">{r.ml_model.model}</dd>
+                    </div>
+                    <div className="flex justify-between border-b border-[var(--color-rule-soft)] pb-2">
+                      <dt className="text-[var(--color-neutral)]">directional acc.</dt>
+                      <dd className="text-[var(--color-ink)]">{fmtPct(r.ml_model.metrics.directional_accuracy ?? 0, 0)}</dd>
+                    </div>
+                    <div className="flex justify-between border-b border-[var(--color-rule-soft)] pb-2">
+                      <dt className="text-[var(--color-neutral)]">r²</dt><dd className="text-[var(--color-ink)]">{fmtNum(r.ml_model.metrics.r2 ?? 0, 3)}</dd>
+                    </div>
+                    <div className="flex justify-between pt-1">
+                      <dt className="text-[var(--color-muted)]">walk-forward folds</dt><dd className="text-[var(--color-ink)]">{r.ml_model.n_folds}</dd>
+                    </div>
+                  </dl>
+                  <div>
+                    <p className="mb-2 text-xs uppercase tracking-[0.1em] text-[var(--color-neutral)]">feature importance</p>
+                    <FeatureImportance importances={r.ml_model.importances} />
+                  </div>
+                </div>
+              </Panel>
+            )}
 
             <div className="flex items-center gap-2 text-xs text-[var(--color-neutral)]">
               <Badge tone="plain">sample data</Badge>
