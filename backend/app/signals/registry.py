@@ -6,6 +6,7 @@ from .custom import CustomCodeSignal
 from .mean_reversion import Bollinger, PairsSpread, ZScoreReversion
 from .ml import MlSignal
 from .momentum import Breakout, Macd, Rsi, SmaCrossover, TimeSeriesMomentum
+from ..ml.ranker import MlTrainedSignal
 
 _REGISTRY: dict[str, type[Signal]] = {
     cls.meta.key: cls
@@ -13,6 +14,7 @@ _REGISTRY: dict[str, type[Signal]] = {
         SmaCrossover, TimeSeriesMomentum, Rsi, Macd, Breakout,
         ZScoreReversion, Bollinger, PairsSpread,
         MlSignal,
+        MlTrainedSignal,
     )
 }
 

@@ -98,6 +98,8 @@ def run_backtest(
         )
         filter_result = build_filter_mask(closes, scores, fcfg)
 
+    model_diag = getattr(signal, "diagnostics", None)
+
     window = closes.loc[(closes.index >= pd.Timestamp(start_date)) & (closes.index <= pd.Timestamp(end_date))]
     if len(window) < 5:
         raise ValueError("Backtest window contains fewer than 5 trading days")
@@ -206,4 +208,6 @@ def run_backtest(
             "importances": filter_result.importances,
             "n_folds": filter_result.n_folds,
         }
+    if model_diag:
+        payload["ml_model"] = model_diag
     return payload
