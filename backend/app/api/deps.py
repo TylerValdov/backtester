@@ -52,6 +52,7 @@ def enforce_strategy_quota(user: User, db: Session) -> None:
         )
 
 
-def enforce_ml_access(user: User, signal_type: str) -> None:
-    if signal_type == "ml_model" and not limits_for(user)["ml"]:
-        raise HTTPException(402, "ML model signals are a Pro feature. Upgrade to plug in models.")
+def enforce_ml_access(user: User, signal_type: str, ml_filter: dict | None = None) -> None:
+    uses_ml = signal_type in ("ml_model", "ml_trained") or bool((ml_filter or {}).get("enabled"))
+    if uses_ml and not limits_for(user)["ml"]:
+        raise HTTPException(402, "ML signals and the ML trade filter are a Pro feature. Upgrade to use them.")

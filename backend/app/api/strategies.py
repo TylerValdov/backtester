@@ -20,6 +20,7 @@ class VersionIn(BaseModel):
     position_mode: str = "long_top"
     top_n: int = 5
     slippage: dict = Field(default_factory=dict)
+    ml_filter: dict = Field(default_factory=dict)
 
 
 class StrategyIn(BaseModel):
@@ -35,7 +36,7 @@ def _version_payload(v: StrategyVersion) -> dict:
         "signal_type": v.signal_type, "params": v.params, "code": v.code,
         "universe": v.universe, "rebalance": v.rebalance,
         "position_mode": v.position_mode, "top_n": v.top_n,
-        "slippage": v.slippage, "parent_version_id": v.parent_version_id,
+        "slippage": v.slippage, "ml_filter": v.ml_filter, "parent_version_id": v.parent_version_id,
         "created_at": v.created_at.isoformat(),
     }
 
@@ -81,7 +82,7 @@ def list_strategies(user: User = Depends(get_current_user), db: Session = Depend
 @router.post("", status_code=201)
 def create_strategy(body: StrategyIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     enforce_strategy_quota(user, db)
-    enforce_ml_access(user, body.version.signal_type)
+    enforce_ml_access(user, body.version.signal_type, body.version.ml_filter)
     s = Strategy(user_id=user.id, name=body.name, description=body.description, category=body.category)
     db.add(s)
     db.flush()
@@ -99,7 +100,7 @@ def get_strategy(strategy_id: str, user: User = Depends(get_current_user), db: S
 @router.post("/{strategy_id}/versions", status_code=201)
 def add_version(strategy_id: str, body: VersionIn, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     s = _owned(strategy_id, user, db)
-    enforce_ml_access(user, body.signal_type)
+    enforce_ml_access(user, body.signal_type, body.ml_filter)
     latest = s.versions[-1] if s.versions else None
     v = StrategyVersion(
         strategy_id=s.id,

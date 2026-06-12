@@ -214,3 +214,19 @@ def test_universe_and_catalog_public(client):
     assert any(c["key"] == "zscore" for c in cat)
     ohlcv = client.get("/api/ohlcv/SPY?limit=100").json()
     assert len(ohlcv["close"]) == 100
+
+
+def test_ml_filter_gated_to_pro(client):
+    _signup_and_login(client)
+    body = {**STRATEGY_BODY, "name": "Filtered",
+            "version": {**STRATEGY_BODY["version"], "ml_filter": {"enabled": True, "model": "logistic"}}}
+    assert client.post("/api/strategies", json=body).status_code == 402
+    client.post("/api/settings/plan", json={"plan": "pro"})
+    assert client.post("/api/strategies", json=body).status_code == 201
+
+
+def test_ml_trained_signal_gated_to_pro(client):
+    _signup_and_login(client)
+    body = {**STRATEGY_BODY, "name": "Trained",
+            "version": {**STRATEGY_BODY["version"], "signal_type": "ml_trained"}}
+    assert client.post("/api/strategies", json=body).status_code == 402
