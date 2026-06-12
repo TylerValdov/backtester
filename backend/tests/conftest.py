@@ -9,3 +9,4 @@ import os
 
 os.environ["MARKET_DATA_PROVIDER"] = "synthetic"
 os.environ["RESEND_API_KEY"] = ""  # keep signup on the dev-link path in tests
+os.environ["COOKIE_SECURE"] = "false"  # TestClient runs over http; a Secure cookie would be dropped
