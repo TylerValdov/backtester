@@ -39,6 +39,7 @@ export type StrategyVersion = {
   slippage: Record<string, number>;
   parent_version_id: string | null;
   created_at: string;
+  ml_filter?: Record<string, unknown>;
 };
 
 export type Metrics = {
@@ -116,6 +117,8 @@ export type BacktestResult = {
     end: string;
     initial_capital: number;
   };
+  ml_filter?: MlFilterResult;
+  ml_model?: MlModelResult;
 };
 
 export type Backtest = {
@@ -223,6 +226,25 @@ export type AnalyticsOverview = {
     strategy_name: string;
     ongoing?: boolean;
   }[];
+};
+
+export type MlFilterResult = {
+  n_candidates: number;
+  pct_taken: number;
+  avg_return_taken: number;
+  avg_return_skipped: number;
+  threshold: number;
+  model: string;
+  metrics: { precision?: number; recall?: number; accuracy?: number; auc?: number };
+  importances: Record<string, number>;
+  n_folds: number;
+};
+
+export type MlModelResult = {
+  metrics: { r2?: number; directional_accuracy?: number };
+  importances: Record<string, number>;
+  n_folds: number;
+  model: string;
 };
 
 export type VersionDiff = {

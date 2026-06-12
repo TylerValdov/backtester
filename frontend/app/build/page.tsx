@@ -50,6 +50,7 @@ function BuilderInner() {
   const [positionMode, setPositionMode] = useState("long_top");
   const [topN, setTopN] = useState(4);
   const [slip, setSlip] = useState({ fixed_per_share: 0.005, pct_bps: 2, impact_k: 0.1 });
+  const [mlFilter, setMlFilter] = useState({ enabled: false, model: "random_forest", threshold: 0.55, retrain_days: 63 });
   const [{ start, end }, setDates] = useState(defaultDates());
   const [capital, setCapital] = useState(100000);
 
@@ -77,6 +78,9 @@ function BuilderInner() {
           setPositionMode(v.position_mode);
           setTopN(v.top_n);
           setSlip({ fixed_per_share: 0.005, pct_bps: 2, impact_k: 0.1, ...v.slippage });
+          if (v.ml_filter && (v.ml_filter as { enabled?: boolean }).enabled) {
+            setMlFilter({ enabled: true, model: "random_forest", threshold: 0.55, retrain_days: 63, ...(v.ml_filter as object) });
+          }
         }
       }).catch(() => {});
     }
@@ -118,6 +122,7 @@ function BuilderInner() {
       position_mode: positionMode,
       top_n: topN,
       slippage: slip,
+      ml_filter: mlFilter.enabled ? mlFilter : {},
     };
     setRunning({ progress: 0 });
     try {
@@ -365,6 +370,46 @@ function BuilderInner() {
                 onChange={(e) => setSlip({ ...slip, impact_k: Number(e.target.value) })}
               />
             </div>
+          </Panel>
+
+          <Panel title="ml trade filter" right={
+            <button
+              onClick={() => setMlFilter({ ...mlFilter, enabled: !mlFilter.enabled })}
+              className="press text-xs"
+              style={{ fontFamily: "var(--font-mono)", color: mlFilter.enabled ? "var(--color-accent)" : "var(--color-neutral)" }}
+            >
+              {mlFilter.enabled ? "on" : "off"}
+            </button>
+          }>
+            {mlFilter.enabled ? (
+              <div className="grid gap-4 sm:grid-cols-3">
+                <SelectField label="Model" value={mlFilter.model} onChange={(v) => setMlFilter({ ...mlFilter, model: v })}
+                  options={[
+                    { value: "logistic", label: "Logistic" },
+                    { value: "random_forest", label: "Random forest" },
+                    { value: "gradient_boosting", label: "Gradient boosting" },
+                    { value: "xgboost", label: "XGBoost" },
+                  ]} />
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs uppercase tracking-[0.08em] text-[var(--color-neutral)]">
+                    Min win probability: <span className="text-[var(--color-accent)]">{mlFilter.threshold.toFixed(2)}</span>
+                  </label>
+                  <input type="range" min={0.4} max={0.8} step={0.01} value={mlFilter.threshold}
+                    onChange={(e) => setMlFilter({ ...mlFilter, threshold: Number(e.target.value) })}
+                    className="accent-[var(--color-accent)]" />
+                </div>
+                <SelectField label="Retrain cadence" value={String(mlFilter.retrain_days)}
+                  onChange={(v) => setMlFilter({ ...mlFilter, retrain_days: Number(v) })}
+                  options={[{ value: "21", label: "Monthly" }, { value: "63", label: "Quarterly" }, { value: "126", label: "Semiannual" }]} />
+                <p className="text-xs text-[var(--color-neutral)] sm:col-span-3">
+                  Trains on this strategy&rsquo;s own past trades (walk-forward) and skips entries below the win-probability threshold. Pro feature.
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-[var(--color-neutral)]">
+                Off. Enable to train a model on this strategy&rsquo;s trades and skip the ones it predicts will lose.
+              </p>
+            )}
           </Panel>
 
           <Panel title="backtest window">
