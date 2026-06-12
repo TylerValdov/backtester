@@ -80,6 +80,7 @@ class StrategyVersion(Base):
     position_mode: Mapped[str] = mapped_column(String(16), default="long_top")  # long_top | long_short | signal_weight
     top_n: Mapped[int] = mapped_column(Integer, default=5)
     slippage: Mapped[dict] = mapped_column(JSON, default=dict)
+    ml_filter: Mapped[dict] = mapped_column(JSON, default=dict)
     parent_version_id: Mapped[str | None] = mapped_column(String(32), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 

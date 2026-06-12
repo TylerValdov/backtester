@@ -81,6 +81,23 @@ def run_backtest(
     if int(version.params.get("signal_lag", 0)):
         scores = scores.shift(int(version.params["signal_lag"]))
 
+    # ML trade filter (meta-labeling) — optional, see app/ml/filter.py
+    ml_filter_cfg = getattr(version, "ml_filter", None) or {}
+    filter_result = None
+    if ml_filter_cfg.get("enabled"):
+        from ..ml.filter import FilterConfig, build_filter_mask
+
+        fcfg = FilterConfig(
+            model=ml_filter_cfg.get("model", "random_forest"),
+            threshold=float(ml_filter_cfg.get("threshold", 0.55)),
+            rebalance=version.rebalance,
+            position_mode=version.position_mode,
+            top_n=version.top_n,
+            retrain_every_days=int(ml_filter_cfg.get("retrain_days", 63)),
+            train_window_days=int(ml_filter_cfg.get("train_window_days", 504)),
+        )
+        filter_result = build_filter_mask(closes, scores, fcfg)
+
     window = closes.loc[(closes.index >= pd.Timestamp(start_date)) & (closes.index <= pd.Timestamp(end_date))]
     if len(window) < 5:
         raise ValueError("Backtest window contains fewer than 5 trading days")
@@ -105,6 +122,16 @@ def run_backtest(
         if ts in rebal:
             eq = pf.equity(prices)
             weights = target_weights(scores.loc[ts], version.position_mode, version.top_n)
+            if filter_result is not None and weights:
+                kept = {}
+                for sym, w in weights.items():
+                    if w <= 0 or bool(filter_result.mask.get((ts, sym), True)):
+                        kept[sym] = w
+                pos_total = sum(w for w in kept.values() if w > 0)
+                if pos_total > 0:
+                    weights = {s: (w / pos_total if w > 0 else w) for s, w in kept.items()}
+                else:
+                    weights = {}
             # Sells first so cash frees up before buys
             deltas = []
             for sym in set(list(weights) + [s for s in pf.positions if abs(pf.qty(s)) > 1e-9]):
@@ -147,7 +174,7 @@ def run_backtest(
     dd = drawdown_series(equity)
     rs = rolling_sharpe(equity.pct_change().fillna(0.0), 63)
 
-    return {
+    payload = {
         "dates": date_strs,
         "equity": [round(v, 2) for v in equity.tolist()],
         "benchmark": [round(v, 2) for v in benchmark.tolist()],
@@ -172,3 +199,11 @@ def run_backtest(
             "initial_capital": initial_capital,
         },
     }
+    if filter_result is not None:
+        payload["ml_filter"] = {
+            **filter_result.diagnostics,
+            "metrics": filter_result.metrics,
+            "importances": filter_result.importances,
+            "n_folds": filter_result.n_folds,
+        }
+    return payload
