@@ -1,6 +1,8 @@
 """Feature 1 — meta-labeling trade filter. Builds one training sample per
-candidate long entry (features at entry -> did it beat costs over the holding
-period), walk-forward predicts P(win), and returns a take/skip mask."""
+candidate entry — long or short (features at entry -> did the position, in its
+intended direction, beat costs over the holding period), walk-forward predicts
+P(win), and returns a take/skip mask. The signed base-signal feature lets one
+model gate both long and short legs."""
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -41,19 +43,21 @@ def build_filter_mask(closes: pd.DataFrame, base_scores: pd.DataFrame, cfg: Filt
     rows = []
     for i, d in enumerate(rebal):
         weights = target_weights(base_scores.loc[d], cfg.position_mode, cfg.top_n)
-        longs = [s for s, w in weights.items() if w > 0]
-        if not longs:
+        # +1 for long legs, -1 for short legs; both are candidates to gate
+        directions = {s: (1 if w > 0 else -1) for s, w in weights.items() if w != 0}
+        if not directions:
             continue
         nxt = rebal[i + 1] if i + 1 < len(rebal) else closes.index[-1]
-        for sym in longs:
+        for sym, direction in directions.items():
             entry = closes.at[d, sym]
             exit_ = closes.at[nxt, sym]
             if pd.isna(entry) or pd.isna(exit_) or entry <= 0:
                 continue
-            ret = exit_ / entry - 1
+            # position return is direction-aware: a short profits when price falls
+            pos_ret = direction * (exit_ / entry - 1)
             feats = {name: panel[name].at[d, sym] for name in FEATURE_NAMES_FILTER}
-            rows.append({"date": d, "symbol": sym, "label": int(ret > cfg.cost_hurdle),
-                         "resolved": nxt, "holding_return": ret, **feats})
+            rows.append({"date": d, "symbol": sym, "label": int(pos_ret > cfg.cost_hurdle),
+                         "resolved": nxt, "position_return": pos_ret, **feats})
 
     samples = pd.DataFrame(rows)
     if samples.empty:
@@ -68,8 +72,8 @@ def build_filter_mask(closes: pd.DataFrame, base_scores: pd.DataFrame, cfg: Filt
     take = (prob.isna()) | (prob >= cfg.threshold)
     mask = pd.Series(take.to_numpy(), index=keys)
 
-    taken = samples["holding_return"][take.to_numpy()]
-    skipped = samples["holding_return"][~take.to_numpy()]
+    taken = samples["position_return"][take.to_numpy()]
+    skipped = samples["position_return"][~take.to_numpy()]
     diagnostics = {
         "n_candidates": int(len(samples)),
         "pct_taken": float(take.mean()),

@@ -27,3 +27,18 @@ def test_filter_disabled_when_flag_absent():
         ml_filter = {}
     r = run_backtest(W(), "2018-06-01", "2020-06-01", 100_000.0)
     assert "ml_filter" not in r
+
+
+def test_long_short_with_filter_runs_and_holds_shorts():
+    class LS(V):
+        signal_type = "zscore"
+        params = {"lookback": 20}
+        position_mode = "long_short"
+        top_n = 3
+        ml_filter = {"enabled": True, "model": "logistic", "threshold": 0.55}
+
+    r = run_backtest(LS(), "2018-06-01", "2021-06-01", 100_000.0)
+    assert "ml_filter" in r
+    assert len(r["equity"]) > 200
+    # short legs must survive the filter: the trade log should contain shorts
+    assert any(t["side"] == "short" for t in r["trades"])

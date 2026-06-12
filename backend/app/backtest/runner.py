@@ -125,16 +125,18 @@ def run_backtest(
             eq = pf.equity(prices)
             weights = target_weights(scores.loc[ts], version.position_mode, version.top_n)
             if filter_result is not None and weights:
-                kept = {}
-                for sym, w in weights.items():
-                    if w <= 0 or bool(filter_result.mask.get((ts, sym), True)):
-                        kept[sym] = w
-                pos_total = sum(w for w in kept.values() if w > 0)
-                if pos_total > 0:
-                    weights = {s: (w / pos_total if w > 0 else w) for s, w in kept.items()}
-                else:
-                    # all longs filtered out — keep any short legs (v1 filters longs only)
-                    weights = {s: w for s, w in kept.items() if w <= 0}
+                # gate every leg (long and short) by the model's take/skip mask
+                kept = {s: w for s, w in weights.items() if bool(filter_result.mask.get((ts, s), True))}
+                # rescale each side back to the strategy's original gross exposure,
+                # so skipping trades concentrates the survivors rather than letting
+                # net exposure drift (keeps long_short dollar-neutral)
+                orig_pos = sum(w for w in weights.values() if w > 0)
+                orig_neg = sum(w for w in weights.values() if w < 0)
+                kept_pos = sum(w for w in kept.values() if w > 0)
+                kept_neg = sum(w for w in kept.values() if w < 0)
+                pos_scale = orig_pos / kept_pos if kept_pos > 0 else 0.0
+                neg_scale = orig_neg / kept_neg if kept_neg < 0 else 0.0
+                weights = {s: w * (pos_scale if w > 0 else neg_scale) for s, w in kept.items()}
             # Sells first so cash frees up before buys
             deltas = []
             for sym in set(list(weights) + [s for s in pf.positions if abs(pf.qty(s)) > 1e-9]):
