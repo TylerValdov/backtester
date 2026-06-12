@@ -78,9 +78,8 @@ function BuilderInner() {
           setPositionMode(v.position_mode);
           setTopN(v.top_n);
           setSlip({ fixed_per_share: 0.005, pct_bps: 2, impact_k: 0.1, ...v.slippage });
-          if (v.ml_filter && (v.ml_filter as { enabled?: boolean }).enabled) {
-            setMlFilter({ enabled: true, model: "random_forest", threshold: 0.55, retrain_days: 63, ...(v.ml_filter as object) });
-          }
+          // always reset from the loaded version (defaults when it had no filter)
+          setMlFilter({ enabled: false, model: "random_forest", threshold: 0.55, retrain_days: 63, ...(v.ml_filter as object) });
         }
       }).catch(() => {});
     }

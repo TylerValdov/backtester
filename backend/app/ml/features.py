@@ -47,13 +47,3 @@ def build_feature_panel(closes: pd.DataFrame, base_scores: pd.DataFrame | None) 
         panel["signal"] = base_scores.reindex(index=closes.index, columns=cols)
 
     return panel
-
-
-def assemble_matrix(panel: dict[str, pd.DataFrame], feature_names: list[str],
-                    keys: pd.MultiIndex) -> np.ndarray:
-    """Build an (n_samples, n_features) matrix for the given (date, symbol) keys."""
-    cols = []
-    for name in feature_names:
-        df = panel[name]
-        cols.append(df.stack().reindex(keys).to_numpy())
-    return np.column_stack(cols)

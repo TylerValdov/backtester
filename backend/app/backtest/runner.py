@@ -133,7 +133,8 @@ def run_backtest(
                 if pos_total > 0:
                     weights = {s: (w / pos_total if w > 0 else w) for s, w in kept.items()}
                 else:
-                    weights = {}
+                    # all longs filtered out — keep any short legs (v1 filters longs only)
+                    weights = {s: w for s, w in kept.items() if w <= 0}
             # Sells first so cash frees up before buys
             deltas = []
             for sym in set(list(weights) + [s for s in pf.positions if abs(pf.qty(s)) > 1e-9]):
