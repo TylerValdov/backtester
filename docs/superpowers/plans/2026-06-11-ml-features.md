@@ -395,7 +395,7 @@ from app.ml.walkforward import WalkForwardConfig, walk_forward_predict
 CFG = WalkForwardConfig(train_window_days=120, retrain_every_days=30, min_train_samples=50)
 
 
-def _samples(n_dates=400, n_syms=6, leak=False, seed=0):
+def _samples(n_dates=400, n_syms=6, seed=0):
     rng = np.random.default_rng(seed)
     dates = pd.bdate_range("2020-01-01", periods=n_dates)
     rows = []
@@ -403,11 +403,8 @@ def _samples(n_dates=400, n_syms=6, leak=False, seed=0):
         for s in range(n_syms):
             f1, f2 = rng.normal(), rng.normal()
             label = int(f1 + 0.3 * rng.normal() > 0)
-            row = {"date": d, "symbol": f"S{s}", "label": label,
-                   "resolved": d + pd.Timedelta(days=5), "f1": f1, "f2": f2}
-            # a leaky feature is a direct function of the (future) label
-            row["leak"] = float(label) + rng.normal(0, 0.01) if leak else rng.normal()
-            rows.append(row)
+            rows.append({"date": d, "symbol": f"S{s}", "label": label,
+                         "resolved": d + pd.Timedelta(days=5), "f1": f1, "f2": f2})
     return pd.DataFrame(rows)
 
 
@@ -421,18 +418,28 @@ def test_predictions_are_out_of_sample_only():
     assert res.n_folds >= 3
 
 
-def test_no_leakage_does_not_inflate_auc():
-    # If the harness leaked the future, the 'leak' feature would score ~1.0 AUC.
-    # Walk-forward must keep it honest: the leak column is random w.r.t. the
-    # model's *training* labels at each cutoff, so AUC stays near chance.
-    s = _samples(leak=True, seed=3)
-    res = walk_forward_predict(s, ["leak"], CFG, "logistic", "clf")
-    # 'leak' encodes each row's own label, so within-row it is predictive — but
-    # the test that matters is that a PURELY future-derived signal can't beat a
-    # clean one once it must generalize across folds. Assert AUC is finite and
-    # not a perfect 1.0 (no oracle).
-    assert 0.0 <= res.metrics["auc"] <= 1.0
-    assert res.metrics["auc"] < 0.999
+def test_predictions_do_not_depend_on_future_labels():
+    # The canonical lookahead guard: a model predicting an early fold trained
+    # only on samples resolved before its cutoff. Mutating labels in the *future*
+    # (the back of the timeline) must NOT change predictions for the early
+    # region — a leaky harness that trained on unresolved/future samples would
+    # change them. This distinguishes a clean harness from a leaky one without
+    # depending on a feature that secretly contains the answer.
+    s = _samples(n_dates=400, seed=5)
+    res_a = walk_forward_predict(s, ["f1", "f2"], CFG, "random_forest", "clf")
+
+    s2 = s.copy()
+    cut = s2["date"].quantile(0.6)
+    future = s2["date"] >= cut
+    s2.loc[future, "label"] = 1 - s2.loc[future, "label"]  # flip the future
+    res_b = walk_forward_predict(s2, ["f1", "f2"], CFG, "random_forest", "clf")
+
+    early_keys = pd.MultiIndex.from_arrays([s.loc[~future, "date"], s.loc[~future, "symbol"]])
+    a = res_a.predictions.reindex(early_keys).dropna()
+    b = res_b.predictions.reindex(early_keys).dropna()
+    common = a.index.intersection(b.index)
+    assert len(common) > 0  # there ARE early out-of-sample predictions to compare
+    assert np.allclose(a.loc[common].to_numpy(), b.loc[common].to_numpy())
 
 
 def test_unresolved_samples_excluded_from_training():
