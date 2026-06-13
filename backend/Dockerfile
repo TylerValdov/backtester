@@ -24,11 +24,11 @@ RUN chmod +x docker-entrypoint.sh
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD curl -fsS http://localhost:8000/api/health || exit 1
+    CMD curl -fsS "http://localhost:${PORT:-8000}/api/health" || exit 1
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
-# Single worker on purpose: the live paper-trading loop (app/paper) and the
-# in-process backtest pool (app/tasks) are per-process singletons. Scaling to
-# multiple workers requires externalizing those (Celery/Redis) — Phase 1.
-CMD ["gunicorn", "app.main:app", "-k", "uvicorn.workers.UvicornWorker", \
-     "-w", "1", "-b", "0.0.0.0:8000", "--timeout", "120"]
+# Bind to $PORT (managed hosts like Railway assign it and route there); falls
+# back to 8000 for local compose. Single worker on purpose: the live paper loop
+# (app/paper) and in-process backtest pool (app/tasks) are per-process
+# singletons — multi-worker needs Celery/Redis (Phase 1). sh -c so $PORT expands.
+CMD ["sh", "-c", "exec gunicorn app.main:app -k uvicorn.workers.UvicornWorker -w 1 -b 0.0.0.0:${PORT:-8000} --timeout 120"]
