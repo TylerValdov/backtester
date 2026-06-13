@@ -243,6 +243,28 @@ function MlChart() {
   );
 }
 
+function FvgChart() {
+  const y = priceDomain();
+  const gi = 24; // gap forms around here, on the up-move
+  const top = PRICE[gi];
+  const bottom = top - 6;
+  const x0 = x(gi);
+  const x1 = x(N - 1);
+  // first later bar that retraces down to tap the gap's near edge
+  let tap = -1;
+  for (let i = gi + 4; i < N; i++) if (PRICE[i] <= top) { tap = i; break; }
+  return (
+    <Frame>
+      <rect x={x0} y={y(top)} width={x1 - x0} height={y(bottom) - y(top)} fill="var(--color-accent)" opacity={0.12} />
+      <line x1={x0} x2={x1} y1={y(top)} y2={y(top)} stroke={C.signalDim} strokeWidth={1} strokeDasharray="3 3" />
+      <line x1={x0} x2={x1} y1={y(bottom)} y2={y(bottom)} stroke={C.signalDim} strokeWidth={1} strokeDasharray="3 3" />
+      <path d={path(PRICE.map((v, i) => [x(i), y(v)]))} fill="none" stroke={C.price} strokeWidth={1.3} opacity={0.7} />
+      {tap >= 0 && <circle cx={x(tap)} cy={y(PRICE[tap])} r={3.5} fill={C.up} stroke="var(--color-paper-2)" strokeWidth={1} />}
+      <text x={x0 + 4} y={y(top) - 4} fontSize={8} fill="var(--color-neutral)" style={{ fontFamily: "var(--font-mono)" }}>fair value gap</text>
+    </Frame>
+  );
+}
+
 const RENDER: Record<string, () => ReactNode> = {
   sma_crossover: () => <CrossoverChart />,
   momentum: () => <MomentumChart />,
@@ -254,6 +276,7 @@ const RENDER: Record<string, () => ReactNode> = {
   pairs: () => <PairsChart />,
   ml_model: () => <MlChart />,
   ml_trained: () => <MlChart />,
+  ict_fvg: () => <FvgChart />,
 };
 
 const CAPTION: Record<string, string> = {
@@ -267,6 +290,7 @@ const CAPTION: Record<string, string> = {
   pairs: "Each name against its closest peer; the gap is the tradable spread.",
   ml_model: "Model scores every name, then ranks longs over shorts.",
   ml_trained: "Walk-forward model ranks the universe by predicted return.",
+  ict_fvg: "A 3-candle imbalance (shaded). Price retraces to tap it, then continues — entry on the tap.",
 };
 
 export function SignalPreview({ signalKey }: { signalKey: string }) {

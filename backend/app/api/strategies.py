@@ -16,6 +16,7 @@ class VersionIn(BaseModel):
     params: dict = Field(default_factory=dict)
     code: str = ""
     universe: list[str] = Field(default_factory=list)
+    timeframe: str = "1d"
     rebalance: str = "daily"
     position_mode: str = "long_top"
     top_n: int = 5
@@ -34,7 +35,7 @@ def _version_payload(v: StrategyVersion) -> dict:
     return {
         "id": v.id, "version_number": v.version_number, "label": v.label,
         "signal_type": v.signal_type, "params": v.params, "code": v.code,
-        "universe": v.universe, "rebalance": v.rebalance,
+        "universe": v.universe, "timeframe": v.timeframe, "rebalance": v.rebalance,
         "position_mode": v.position_mode, "top_n": v.top_n,
         "slippage": v.slippage, "ml_filter": v.ml_filter, "parent_version_id": v.parent_version_id,
         "created_at": v.created_at.isoformat(),
@@ -129,7 +130,7 @@ def fork_strategy(strategy_id: str, user: User = Depends(get_current_user), db: 
     db.add(StrategyVersion(
         strategy_id=fork.id, version_number=1, label=f"forked from {src.name} v{latest.version_number}",
         signal_type=latest.signal_type, params=latest.params, code=latest.code,
-        universe=latest.universe, rebalance=latest.rebalance,
+        universe=latest.universe, timeframe=latest.timeframe, rebalance=latest.rebalance,
         position_mode=latest.position_mode, top_n=latest.top_n,
         slippage=latest.slippage, parent_version_id=latest.id,
     ))

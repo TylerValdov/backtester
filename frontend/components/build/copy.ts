@@ -33,11 +33,18 @@ export const PARAM_HELP: Record<string, string> = {
   "ml_trained.horizon": "How many days ahead the model is trained to predict returns over. 21 ≈ one month.",
   "ml_trained.retrain": "How often the model is refit on newer data as the backtest walks forward. 63 days ≈ quarterly.",
   "ml_trained.train_window": "How much history the first model is trained on before predictions begin. 504 days ≈ two years.",
+
+  "ict_fvg.min_gap_pct": "Smallest fair-value gap to trade, as a percent of price. Higher = only bigger, cleaner imbalances. 0.10% is a light filter.",
+  "ict_fvg.tap_depth": "How far price must trade into the gap to trigger an entry. 0 = enter on the first touch of the near edge; 0.5 = wait for a 50% fill.",
+  "ict_fvg.stop_buffer": "Extra room beyond the far edge of the gap where the stop sits, as a percent of price. Bigger = fewer premature stop-outs.",
+  "ict_fvg.rr": "Reward-to-risk ratio for the target. 2 means the take-profit is twice the distance to the stop.",
+  "ict_fvg.max_hold": "Force-close a trade after this many bars if neither stop nor target is hit. 0 disables the time stop.",
+  "ict_fvg.use_ifvg": "1 = also trade inverse FVGs: when a gap is violated (price closes through it) the zone flips and is traded as the opposite level.",
 };
 
 export const FIELD_HELP = {
   topN: "How many assets to hold at once — the top-ranked by the signal. With short selling on, the same count is used per side.",
-  rebalance: "How often the strategy re-ranks and trades. Weekly balances responsiveness against trading costs.",
+  rebalance: "How often the strategy re-ranks and trades. Every bar trades on each candle; Daily trades once per session. Weekly balances responsiveness against trading costs.",
   positioning:
     "Buy best assets owns the best-ranked names. Buy best, short worst also shorts the lowest-ranked (roughly market-neutral). Weight by signal sizes each position by conviction.",
   slipFixed: "A flat cost per share, in dollars, to model commissions and spread. Leave at 0.005 if unsure.",

@@ -17,7 +17,7 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 
-from ..data import BENCHMARK, SYMBOLS, get_provider
+from ..data import BENCHMARK, SYMBOLS, get_provider, is_intraday, normalize, periods_per_year
 from ..risk import SlippageConfig, apply_slippage, drawdown_series, rolling_sharpe, summarize
 from ..signals import build_signal
 from .portfolio import Portfolio
@@ -26,13 +26,18 @@ MAX_TRADES_IN_PAYLOAD = 1000
 
 
 def rebalance_dates(dates: pd.DatetimeIndex, freq: str) -> set:
+    if freq == "every_bar":
+        return set(dates)  # trade every bar (intraday-friendly)
     if freq == "weekly":
         keys = dates.to_series().groupby([dates.isocalendar().year, dates.isocalendar().week]).first()
         return set(keys)
     if freq == "monthly":
         keys = dates.to_series().groupby([dates.year, dates.month]).first()
         return set(keys)
-    return set(dates)  # daily
+    # daily: first bar of each calendar day. On daily data that's every bar; on
+    # intraday it's once per session (the open).
+    keys = dates.to_series().groupby(dates.normalize()).first()
+    return set(keys)
 
 
 def target_weights(row: pd.Series, mode: str, top_n: int) -> dict[str, float]:
@@ -70,12 +75,28 @@ def run_backtest(
     initial_capital: float,
     on_progress: Callable[[float], None] | None = None,
 ) -> dict:
+    # ICT / event strategies use a separate engine (entry/stop/target) but
+    # return the same payload shape.
+    from ..ict import is_ict, run_ict_backtest
+    if is_ict(version.signal_type):
+        return run_ict_backtest(version, start_date, end_date, initial_capital, on_progress)
+
     provider = get_provider()
     symbols = list(version.universe) or SYMBOLS[:10]
     slip_cfg = SlippageConfig.from_dict(version.slippage)
+    timeframe = normalize(getattr(version, "timeframe", "1d"))
+    ppy = periods_per_year(timeframe)
 
-    # Full history for signal warmup; the simulation window is sliced after.
-    closes = provider.closes(symbols)
+    # Data window: daily pulls full history (cheap, cached) for signal warmup;
+    # intraday pulls the requested span plus a short warmup pad (minute history
+    # is too large to backfill wholesale).
+    if is_intraday(timeframe):
+        data_start = (pd.Timestamp(start_date) - pd.Timedelta(days=10)).strftime("%Y-%m-%d")
+        data_end = end_date
+    else:
+        data_start = data_end = None
+
+    closes = provider.closes(symbols, data_start, data_end, timeframe)
     signal = build_signal(version.signal_type, version.params, code=version.code)
     scores = signal.generate(closes)
     if int(version.params.get("signal_lag", 0)):
@@ -100,16 +121,18 @@ def run_backtest(
 
     model_diag = getattr(signal, "diagnostics", None)
 
-    window = closes.loc[(closes.index >= pd.Timestamp(start_date)) & (closes.index <= pd.Timestamp(end_date))]
+    end_ts = pd.Timestamp(end_date) + pd.Timedelta(hours=23, minutes=59, seconds=59)
+    window = closes.loc[(closes.index >= pd.Timestamp(start_date)) & (closes.index <= end_ts)]
     if len(window) < 5:
-        raise ValueError("Backtest window contains fewer than 5 trading days")
+        raise ValueError("Backtest window contains fewer than 5 bars of data")
     dates = window.index
     rebal = rebalance_dates(dates, version.rebalance)
-    date_strs = [d.strftime("%Y-%m-%d") for d in dates]
+    label_fmt = "%Y-%m-%d %H:%M" if is_intraday(timeframe) else "%Y-%m-%d"
+    date_strs = [d.strftime(label_fmt) for d in dates]
     days_index = {ds: i for i, ds in enumerate(date_strs)}
 
-    # Per-symbol stats the impact model needs
-    volumes = {s: provider.history(s)["volume"] for s in symbols}
+    # Per-symbol stats the impact model needs (same timeframe + window as closes)
+    volumes = {s: provider.history(s, data_start, data_end, timeframe)["volume"] for s in symbols}
     sigmas = {s: float(closes[s].pct_change().std()) for s in symbols}
 
     pf = Portfolio(cash=initial_capital)
@@ -168,16 +191,16 @@ def run_backtest(
     equity = pd.Series(equity_curve, index=dates)
 
     # Benchmark: SPY scaled to the same starting capital
-    bench_closes = provider.history(BENCHMARK, start_date, end_date)["close"].reindex(dates).ffill()
+    bench_closes = provider.history(BENCHMARK, data_start or start_date, data_end or end_date, timeframe)["close"].reindex(dates).ffill()
     benchmark = bench_closes / bench_closes.iloc[0] * initial_capital
 
     trades = pf.closed_trades
-    metrics = summarize(equity, benchmark, trades)
+    metrics = summarize(equity, benchmark, trades, ppy=ppy)
     metrics["total_slippage"] = round(slippage_totals["total"], 2)
     metrics["turnover_orders"] = len(orders)
 
     dd = drawdown_series(equity)
-    rs = rolling_sharpe(equity.pct_change().fillna(0.0), 63)
+    rs = rolling_sharpe(equity.pct_change().fillna(0.0), 63, ppy=ppy)
 
     payload = {
         "dates": date_strs,
@@ -195,6 +218,7 @@ def run_backtest(
             "symbols": symbols,
             "signal_type": version.signal_type,
             "params": version.params,
+            "timeframe": timeframe,
             "rebalance": version.rebalance,
             "position_mode": version.position_mode,
             "top_n": version.top_n,

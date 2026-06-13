@@ -27,7 +27,17 @@ const CATEGORY_LABEL: Record<string, string> = {
   momentum: "Momentum",
   mean_reversion: "Mean reversion",
   ml: "ML-based",
+  ict: "ICT / price action",
 };
+
+// Fallback if /api/timeframes hasn't loaded yet (keeps the selector populated).
+const FALLBACK_TFS = [
+  { key: "1m", label: "1 minute" },
+  { key: "5m", label: "5 minute" },
+  { key: "15m", label: "15 minute" },
+  { key: "1h", label: "1 hour" },
+  { key: "1d", label: "1 day" },
+];
 
 function defaultDates(): { start: string; end: string } {
   const end = new Date();
@@ -48,7 +58,10 @@ function BuilderInner() {
   const [custom, setCustom] = useState(false);
   const [code, setCode] = useState(DEFAULT_CODE);
   const [params, setParams] = useState<Record<string, number>>({});
-  const [symbols, setSymbols] = useState<string[]>(["AAPL", "MSFT", "NVDA", "AMZN", "JPM", "XOM", "UNH", "GLD"]);
+  const [symbols, setSymbols] = useState<string[]>(["AAPL"]);
+  const [assetMode, setAssetMode] = useState<"single" | "multi">("single");
+  const [timeframe, setTimeframe] = useState("1d");
+  const [timeframes, setTimeframes] = useState(FALLBACK_TFS);
   const [rebalance, setRebalance] = useState("weekly");
   const [positionMode, setPositionMode] = useState("long_top");
   const [topN, setTopN] = useState(4);
@@ -64,6 +77,7 @@ function BuilderInner() {
   useEffect(() => {
     api.get<SignalMeta[]>("/api/signals/catalog").then(setCatalog).catch(() => {});
     api.get<UniverseEntry[]>("/api/universe").then(setUniverse).catch(() => {});
+    api.get<{ key: string; label: string }[]>("/api/timeframes").then(setTimeframes).catch(() => {});
     const sid = search.get("strategy");
     if (sid) {
       api.get<Strategy>(`/api/strategies/${sid}`).then((s) => {
@@ -77,6 +91,8 @@ function BuilderInner() {
           if (v.code) setCode(v.code);
           setParams(v.params ?? {});
           setSymbols(v.universe);
+          setAssetMode((v.universe?.length ?? 0) > 1 ? "multi" : "single");
+          setTimeframe(v.timeframe ?? "1d");
           setRebalance(v.rebalance);
           setPositionMode(v.position_mode);
           setTopN(v.top_n);
@@ -89,6 +105,9 @@ function BuilderInner() {
   }, [search]);
 
   const meta = useMemo(() => catalog.find((c) => c.key === signalType), [catalog, signalType]);
+  const tfLabel = useMemo(() => timeframes.find((t) => t.key === timeframe)?.label ?? timeframe, [timeframes, timeframe]);
+  // ICT/event strategies manage their own entries/exits — rank-and-hold controls don't apply.
+  const isEvent = !custom && meta?.category === "ict";
 
   useEffect(() => {
     // reset params to spec defaults when the signal type changes (unless loaded)
@@ -109,6 +128,18 @@ function BuilderInner() {
     });
   }
 
+  // In single mode a click replaces the selection (radio-style); in multi it
+  // toggles. Switching to single collapses to one ticker.
+  function pickAsset(sym: string) {
+    if (assetMode === "single") setSymbols([sym]);
+    else toggleSymbol(sym);
+  }
+
+  function switchMode(mode: "single" | "multi") {
+    setAssetMode(mode);
+    if (mode === "single") setSymbols((prev) => [prev[0] ?? "AAPL"]);
+  }
+
   const tickersBySector = useMemo(() => {
     const g: Record<string, UniverseEntry[]> = {};
     for (const u of universe) (g[u.sector] ??= []).push(u);
@@ -122,7 +153,7 @@ function BuilderInner() {
       return;
     }
     if (symbols.length === 0) {
-      setError("Pick at least one ticker to test on.");
+      setError("Pick at least one asset to test on.");
       return;
     }
     const versionBody = {
@@ -131,9 +162,10 @@ function BuilderInner() {
       params,
       code: custom ? code : "",
       universe: symbols,
+      timeframe,
       rebalance,
       position_mode: positionMode,
-      top_n: topN,
+      top_n: assetMode === "single" ? 1 : topN,
       slippage: slip,
       ml_filter: mlFilter.enabled ? mlFilter : {},
     };
@@ -273,8 +305,35 @@ function BuilderInner() {
             )
           )}
 
+          <Panel title="2 · timeframe">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {timeframes.map((tf) => {
+                const active = timeframe === tf.key;
+                return (
+                  <button
+                    key={tf.key}
+                    onClick={() => setTimeframe(tf.key)}
+                    className={`press rounded-[3px] border px-3 py-1.5 text-xs ${
+                      active
+                        ? "border-[var(--color-accent)] text-[var(--color-accent)]"
+                        : "border-[var(--color-rule)] text-[var(--color-muted)] hover:text-[var(--color-ink)]"
+                    }`}
+                    style={{ fontFamily: "var(--font-mono)" }}
+                  >
+                    {tf.label}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-2.5 text-xs leading-relaxed text-[var(--color-neutral)]">
+              {timeframe === "1d"
+                ? "Daily candles. Window lengths below count trading days."
+                : `Each candle is ${tfLabel}. Window lengths below count bars at this timeframe — e.g. a fast window of 10 means 10 ${tfLabel} candles. Intraday history is limited to a recent span.`}
+            </p>
+          </Panel>
+
           {!custom && (
-            <Panel title="2 · parameters">
+            <Panel title="3 · parameters">
               {meta && meta.params.length > 0 ? (
                 <div className="grid gap-5 sm:grid-cols-2">
                   {meta.params.map((p: ParamSpec) => {
@@ -315,22 +374,43 @@ function BuilderInner() {
           )}
 
           <Panel
-            title="3 · assets"
+            title="4 · assets"
             right={
-              <div className="flex items-center gap-3 text-xs" style={{ fontFamily: "var(--font-mono)" }}>
-                <span className="text-[var(--color-neutral)]">{symbols.length} selected</span>
-                <button onClick={() => setSymbols(universe.map((u) => u.symbol))} className="press text-[var(--color-muted)] hover:text-[var(--color-accent)]">
-                  all
-                </button>
-                <button onClick={() => setSymbols([])} className="press text-[var(--color-muted)] hover:text-[var(--color-accent)]">
-                  none
-                </button>
+              <div className="flex items-center gap-2 text-xs" style={{ fontFamily: "var(--font-mono)" }}>
+                {([["single", "Single"], ["multi", "Multiple"]] as const).map(([m, label]) => (
+                  <button
+                    key={m}
+                    onClick={() => switchMode(m)}
+                    className={`press rounded-[3px] border px-2 py-1 ${
+                      assetMode === m
+                        ? "border-[var(--color-accent)] text-[var(--color-accent)]"
+                        : "border-[var(--color-rule)] text-[var(--color-muted)] hover:text-[var(--color-ink)]"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
             }
           >
-            <p className="mb-3 text-xs text-[var(--color-neutral)]">
-              The stocks and ETFs the backtest will trade across. Pick a handful or a whole sector — the signal ranks whatever you select.
-            </p>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="text-xs text-[var(--color-neutral)]">
+                {assetMode === "single"
+                  ? "Trade a single stock or ETF. The signal goes long/flat (or long/short) on just this one."
+                  : "Trade across multiple assets. The signal ranks them and holds the best — set how many under execution."}
+              </p>
+              {assetMode === "multi" && (
+                <div className="flex shrink-0 items-center gap-3 text-xs" style={{ fontFamily: "var(--font-mono)" }}>
+                  <span className="text-[var(--color-neutral)]">{symbols.length} selected</span>
+                  <button onClick={() => setSymbols(universe.map((u) => u.symbol))} className="press text-[var(--color-muted)] hover:text-[var(--color-accent)]">
+                    all
+                  </button>
+                  <button onClick={() => setSymbols((prev) => prev.slice(0, 1))} className="press text-[var(--color-muted)] hover:text-[var(--color-accent)]">
+                    clear
+                  </button>
+                </div>
+              )}
+            </div>
             <div className="flex flex-col gap-3">
               {Object.entries(tickersBySector).map(([sector, entries]) => (
                 <div key={sector} className="flex flex-wrap items-center gap-1.5">
@@ -340,7 +420,7 @@ function BuilderInner() {
                     return (
                       <button
                         key={u.symbol}
-                        onClick={() => toggleSymbol(u.symbol)}
+                        onClick={() => pickAsset(u.symbol)}
                         className={`press tnum rounded-[3px] border px-2 py-1 text-xs ${
                           active
                             ? "border-[var(--color-accent)] text-[var(--color-accent)]"
@@ -358,39 +438,51 @@ function BuilderInner() {
             </div>
           </Panel>
 
-          <Panel title="4 · execution">
+          <Panel title="5 · execution">
+            {isEvent && (
+              <p className="mb-3 text-xs text-[var(--color-neutral)]">
+                This strategy manages its own entries and exits (stop &amp; target per trade), so rebalance and positioning don&rsquo;t apply — set those rules under parameters above.
+              </p>
+            )}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <SelectField
-                label="Rebalance"
-                value={rebalance}
-                onChange={setRebalance}
-                info={FIELD_HELP.rebalance}
-                options={[
-                  { value: "daily", label: "Daily" },
-                  { value: "weekly", label: "Weekly" },
-                  { value: "monthly", label: "Monthly" },
-                ]}
-              />
-              <SelectField
-                label="Positioning"
-                value={positionMode}
-                onChange={setPositionMode}
-                info={FIELD_HELP.positioning}
-                options={[
-                  { value: "long_top", label: "Buy best assets" },
-                  { value: "long_short", label: "Buy best, short worst" },
-                  { value: "signal_weight", label: "Weight by signal" },
-                ]}
-              />
-              <Field
-                label="Assets to hold"
-                type="number"
-                min={1}
-                max={Math.max(1, symbols.length)}
-                value={topN}
-                onChange={(e) => setTopN(Math.min(Number(e.target.value), Math.max(1, symbols.length)))}
-                info={FIELD_HELP.topN}
-              />
+              {!isEvent && (
+                <SelectField
+                  label="Rebalance"
+                  value={rebalance}
+                  onChange={setRebalance}
+                  info={FIELD_HELP.rebalance}
+                  options={[
+                    { value: "every_bar", label: "Every bar" },
+                    { value: "daily", label: "Daily" },
+                    { value: "weekly", label: "Weekly" },
+                    { value: "monthly", label: "Monthly" },
+                  ]}
+                />
+              )}
+              {!isEvent && (
+                <SelectField
+                  label="Positioning"
+                  value={positionMode}
+                  onChange={setPositionMode}
+                  info={FIELD_HELP.positioning}
+                  options={[
+                    { value: "long_top", label: "Buy best assets" },
+                    { value: "long_short", label: "Buy best, short worst" },
+                    { value: "signal_weight", label: "Weight by signal" },
+                  ]}
+                />
+              )}
+              {!isEvent && assetMode === "multi" && (
+                <Field
+                  label="Assets to hold"
+                  type="number"
+                  min={1}
+                  max={Math.max(1, symbols.length)}
+                  value={topN}
+                  onChange={(e) => setTopN(Math.min(Number(e.target.value), Math.max(1, symbols.length)))}
+                  info={FIELD_HELP.topN}
+                />
+              )}
               <Field
                 label="Slippage · $/share"
                 type="number"
@@ -462,7 +554,7 @@ function BuilderInner() {
           </Panel>
 
           {/* ── final step: name it (required) + window + run ──────────────── */}
-          <Panel title="5 · name & run">
+          <Panel title="6 · name & run">
             <div className="flex flex-col gap-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field

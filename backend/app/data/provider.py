@@ -30,6 +30,7 @@ import pandas as pd
 
 from ..config import get_settings
 from . import synthetic
+from .timeframes import alpaca_timeframe, is_intraday, normalize
 from .universe import UNIVERSE
 
 log = logging.getLogger("data.provider")
@@ -38,18 +39,18 @@ DATA_BASE = "https://data.alpaca.markets"
 
 class MarketDataProvider(ABC):
     @abstractmethod
-    def history(self, symbol: str, start: str | None = None, end: str | None = None) -> pd.DataFrame: ...
+    def history(self, symbol: str, start: str | None = None, end: str | None = None, timeframe: str = "1d") -> pd.DataFrame: ...
 
-    def closes(self, symbols: list[str], start: str | None = None, end: str | None = None) -> pd.DataFrame:
-        """Aligned close-price matrix: index=dates, columns=symbols."""
-        frames = {s: self.history(s, start, end)["close"] for s in symbols}
+    def closes(self, symbols: list[str], start: str | None = None, end: str | None = None, timeframe: str = "1d") -> pd.DataFrame:
+        """Aligned close-price matrix: index=dates/datetimes, columns=symbols."""
+        frames = {s: self.history(s, start, end, timeframe)["close"] for s in symbols}
         return pd.DataFrame(frames).dropna(how="all")
 
 
 # ── Synthetic (default) ───────────────────────────────────────────────────────
 class SyntheticProvider(MarketDataProvider):
-    def history(self, symbol: str, start: str | None = None, end: str | None = None) -> pd.DataFrame:
-        df = synthetic.get_ohlcv(symbol)
+    def history(self, symbol: str, start: str | None = None, end: str | None = None, timeframe: str = "1d") -> pd.DataFrame:
+        df = synthetic.get_ohlcv(symbol, timeframe)
         if start:
             df = df.loc[df.index >= pd.Timestamp(start)]
         if end:
@@ -64,8 +65,9 @@ def _recent_end() -> str:
 
 
 class AlpacaProvider(MarketDataProvider):
-    """Real daily bars. Full per-symbol history is fetched once and cached, then
-    sliced per request — keeps backtests off the network after warmup."""
+    """Real bars at any timeframe. Daily history is fetched in full once and
+    cached; intraday is fetched for the requested window (minute history is too
+    large to backfill wholesale). Cache is keyed by (symbol, timeframe)."""
 
     _EMPTY = pd.DataFrame(columns=["open", "high", "low", "close", "volume"])
 
@@ -74,18 +76,20 @@ class AlpacaProvider(MarketDataProvider):
         self._headers = {"APCA-API-KEY-ID": s.alpaca_api_key, "APCA-API-SECRET-KEY": s.alpaca_secret_key}
         self._feed = s.alpaca_feed
         self._start = s.alpaca_history_start
-        self._cache: dict[str, pd.DataFrame] = {}
+        self._cache: dict[tuple[str, str], pd.DataFrame] = {}
+        self._covered: dict[tuple[str, str], tuple[str, str]] = {}  # (symbol, tf) -> (start, end) fetched
 
-    def _fetch_bars(self, symbols: list[str]) -> dict[str, pd.DataFrame]:
+    def _fetch_bars(self, symbols: list[str], tf: str, start: str, end: str) -> dict[str, pd.DataFrame]:
+        intraday = is_intraday(tf)
         acc: dict[str, list] = {s: [] for s in symbols}
         page_token: str | None = None
         url = f"{DATA_BASE}/v2/stocks/bars"
         while True:
             params = {
                 "symbols": ",".join(symbols),
-                "timeframe": "1Day",
-                "start": self._start,
-                "end": _recent_end(),
+                "timeframe": alpaca_timeframe(tf),
+                "start": start,
+                "end": end,
                 "adjustment": "all",
                 "feed": self._feed,
                 "limit": 10000,
@@ -106,41 +110,57 @@ class AlpacaProvider(MarketDataProvider):
             if not rows:
                 continue
             df = pd.DataFrame(rows)
-            idx = pd.to_datetime(df["t"], utc=True).dt.tz_localize(None).dt.normalize()
+            idx = pd.to_datetime(df["t"], utc=True).dt.tz_localize(None)
+            if not intraday:
+                idx = idx.dt.normalize()  # collapse daily bars to midnight dates
             out[sym] = (
-                df.assign(date=idx)
+                df.assign(ts=idx)
                 .rename(columns={"o": "open", "h": "high", "l": "low", "c": "close", "v": "volume"})
-                .set_index("date")[["open", "high", "low", "close", "volume"]]
+                .set_index("ts")[["open", "high", "low", "close", "volume"]]
                 .sort_index()
             )
         return out
 
-    def _ensure_cached(self, symbols: list[str]) -> None:
-        missing = [s for s in symbols if s not in self._cache]
+    def _ensure_cached(self, symbols: list[str], tf: str, start: str | None, end: str | None) -> None:
+        fetch_start = (start if start and is_intraday(tf) else self._start)
+        fetch_end = end or _recent_end()
+        missing = []
+        for s in symbols:
+            key = (s, tf)
+            if key not in self._cache:
+                missing.append(s)
+                continue
+            cov = self._covered.get(key)
+            # refetch intraday if the request reaches outside the cached window
+            if is_intraday(tf) and cov and (fetch_start < cov[0] or fetch_end > cov[1]):
+                missing.append(s)
         if not missing:
             return
         try:
-            fetched = self._fetch_bars(missing)
+            fetched = self._fetch_bars(missing, tf, fetch_start, fetch_end)
         except Exception as exc:
-            log.error("Alpaca bars fetch failed for %s: %s", missing, exc)
+            log.error("Alpaca bars fetch failed for %s @ %s: %s", missing, tf, exc)
             fetched = {}
         for s in missing:
-            self._cache[s] = fetched.get(s, self._EMPTY)
+            self._cache[(s, tf)] = fetched.get(s, self._EMPTY)
+            self._covered[(s, tf)] = (fetch_start, fetch_end)
 
-    def history(self, symbol: str, start: str | None = None, end: str | None = None) -> pd.DataFrame:
+    def history(self, symbol: str, start: str | None = None, end: str | None = None, timeframe: str = "1d") -> pd.DataFrame:
         if symbol not in UNIVERSE:
             raise KeyError(f"Unknown symbol: {symbol}")
-        self._ensure_cached([symbol])
-        df = self._cache[symbol]
+        tf = normalize(timeframe)
+        self._ensure_cached([symbol], tf, start, end)
+        df = self._cache[(symbol, tf)]
         if start:
             df = df.loc[df.index >= pd.Timestamp(start)]
         if end:
             df = df.loc[df.index <= pd.Timestamp(end)]
         return df
 
-    def closes(self, symbols: list[str], start: str | None = None, end: str | None = None) -> pd.DataFrame:
-        self._ensure_cached(symbols)
-        frames = {s: self._cache[s]["close"] for s in symbols if not self._cache[s].empty}
+    def closes(self, symbols: list[str], start: str | None = None, end: str | None = None, timeframe: str = "1d") -> pd.DataFrame:
+        tf = normalize(timeframe)
+        self._ensure_cached(symbols, tf, start, end)
+        frames = {s: self._cache[(s, tf)]["close"] for s in symbols if not self._cache[(s, tf)].empty}
         df = pd.DataFrame(frames)
         if start:
             df = df.loc[df.index >= pd.Timestamp(start)]
@@ -153,7 +173,7 @@ class PolygonProvider(MarketDataProvider):
     """PLACEHOLDER[POLYGON]: implement history() to the OHLCV DataFrame contract
     if you switch MARKET_DATA_PROVIDER=polygon."""
 
-    def history(self, symbol: str, start: str | None = None, end: str | None = None) -> pd.DataFrame:
+    def history(self, symbol: str, start: str | None = None, end: str | None = None, timeframe: str = "1d") -> pd.DataFrame:
         raise NotImplementedError("Polygon provider not wired. Use alpaca or synthetic.")
 
 

@@ -5,24 +5,25 @@ import pandas as pd
 TRADING_DAYS = 252
 
 
-def sharpe(returns: pd.Series, rf_annual: float = 0.0) -> float:
-    """Annualized Sharpe ratio of a daily return series."""
+def sharpe(returns: pd.Series, rf_annual: float = 0.0, ppy: float = TRADING_DAYS) -> float:
+    """Annualized Sharpe ratio. ppy = return periods per year (252 for daily,
+    252×bars/day for intraday)."""
     if len(returns) < 2 or returns.std() < 1e-12:
         return 0.0
-    excess = returns - rf_annual / TRADING_DAYS
-    return float(excess.mean() / excess.std() * np.sqrt(TRADING_DAYS))
+    excess = returns - rf_annual / ppy
+    return float(excess.mean() / excess.std() * np.sqrt(ppy))
 
 
-def sortino(returns: pd.Series, rf_annual: float = 0.0) -> float:
+def sortino(returns: pd.Series, rf_annual: float = 0.0, ppy: float = TRADING_DAYS) -> float:
     """Annualized Sortino ratio (downside deviation in the denominator)."""
-    excess = returns - rf_annual / TRADING_DAYS
+    excess = returns - rf_annual / ppy
     downside = excess[excess < 0]
     if len(downside) < 2:
         return 0.0
     dd = float(np.sqrt((downside**2).mean()))
     if dd == 0:
         return 0.0
-    return float(excess.mean() / dd * np.sqrt(TRADING_DAYS))
+    return float(excess.mean() / dd * np.sqrt(ppy))
 
 
 def max_drawdown(equity: pd.Series) -> float:
@@ -38,25 +39,27 @@ def drawdown_series(equity: pd.Series) -> pd.Series:
     return (equity - running_max) / running_max
 
 
-def cagr(equity: pd.Series) -> float:
+def cagr(equity: pd.Series, ppy: float = TRADING_DAYS) -> float:
     if len(equity) < 2 or equity.iloc[0] <= 0:
         return 0.0
-    years = len(equity) / TRADING_DAYS
+    years = len(equity) / ppy
+    if years <= 0:
+        return 0.0
     return float((equity.iloc[-1] / equity.iloc[0]) ** (1 / years) - 1)
 
 
-def volatility(returns: pd.Series) -> float:
-    return float(returns.std() * np.sqrt(TRADING_DAYS))
+def volatility(returns: pd.Series, ppy: float = TRADING_DAYS) -> float:
+    return float(returns.std() * np.sqrt(ppy))
 
 
-def rolling_sharpe(returns: pd.Series, window: int = 63) -> pd.Series:
+def rolling_sharpe(returns: pd.Series, window: int = 63, ppy: float = TRADING_DAYS) -> pd.Series:
     mean = returns.rolling(window).mean()
     std = returns.rolling(window).std()
-    return (mean / std.replace(0, np.nan)) * np.sqrt(TRADING_DAYS)
+    return (mean / std.replace(0, np.nan)) * np.sqrt(ppy)
 
 
-def beta_alpha(returns: pd.Series, benchmark_returns: pd.Series) -> tuple[float, float]:
-    """OLS beta and annualized alpha vs a benchmark daily return series."""
+def beta_alpha(returns: pd.Series, benchmark_returns: pd.Series, ppy: float = TRADING_DAYS) -> tuple[float, float]:
+    """OLS beta and annualized alpha vs a benchmark return series."""
     aligned = pd.concat([returns, benchmark_returns], axis=1).dropna()
     if len(aligned) < 20:
         return 0.0, 0.0
@@ -65,8 +68,8 @@ def beta_alpha(returns: pd.Series, benchmark_returns: pd.Series) -> tuple[float,
     if var == 0:
         return 0.0, 0.0
     beta = float(r.cov(b) / var)
-    alpha_daily = float(r.mean() - beta * b.mean())
-    return beta, alpha_daily * TRADING_DAYS
+    alpha_per_period = float(r.mean() - beta * b.mean())
+    return beta, alpha_per_period * ppy
 
 
 def trade_stats(trades: list[dict]) -> dict:
@@ -87,23 +90,23 @@ def trade_stats(trades: list[dict]) -> dict:
     }
 
 
-def summarize(equity: pd.Series, benchmark_equity: pd.Series, trades: list[dict]) -> dict:
+def summarize(equity: pd.Series, benchmark_equity: pd.Series, trades: list[dict], ppy: float = TRADING_DAYS) -> dict:
     returns = equity.pct_change().dropna()
     bench_returns = benchmark_equity.pct_change().dropna()
-    beta, alpha = beta_alpha(returns, bench_returns)
+    beta, alpha = beta_alpha(returns, bench_returns, ppy)
     stats = trade_stats(trades)
     return {
         "total_return": float(equity.iloc[-1] / equity.iloc[0] - 1) if len(equity) > 1 else 0.0,
-        "cagr": cagr(equity),
-        "sharpe": sharpe(returns),
-        "sortino": sortino(returns),
+        "cagr": cagr(equity, ppy),
+        "sharpe": sharpe(returns, ppy=ppy),
+        "sortino": sortino(returns, ppy=ppy),
         "max_drawdown": max_drawdown(equity),
-        "volatility": volatility(returns),
+        "volatility": volatility(returns, ppy),
         "beta": beta,
         "alpha": alpha,
         "benchmark_total_return": float(benchmark_equity.iloc[-1] / benchmark_equity.iloc[0] - 1) if len(benchmark_equity) > 1 else 0.0,
-        "benchmark_cagr": cagr(benchmark_equity),
-        "benchmark_sharpe": sharpe(bench_returns),
+        "benchmark_cagr": cagr(benchmark_equity, ppy),
+        "benchmark_sharpe": sharpe(bench_returns, ppy=ppy),
         "benchmark_max_drawdown": max_drawdown(benchmark_equity),
         **stats,
     }

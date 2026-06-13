@@ -76,7 +76,8 @@ class StrategyVersion(Base):
     params: Mapped[dict] = mapped_column(JSON, default=dict)
     code: Mapped[str] = mapped_column(Text, default="")  # custom signal code ("custom" signal_type)
     universe: Mapped[list] = mapped_column(JSON, default=list)
-    rebalance: Mapped[str] = mapped_column(String(16), default="daily")  # daily | weekly | monthly
+    timeframe: Mapped[str] = mapped_column(String(8), default="1d")  # 1m | 5m | 15m | 1h | 1d
+    rebalance: Mapped[str] = mapped_column(String(16), default="daily")  # every_bar | daily | weekly | monthly
     position_mode: Mapped[str] = mapped_column(String(16), default="long_top")  # long_top | long_short | signal_weight
     top_n: Mapped[int] = mapped_column(Integer, default=5)
     slippage: Mapped[dict] = mapped_column(JSON, default=dict)

@@ -20,7 +20,7 @@ export type ParamSpec = {
 export type SignalMeta = {
   key: string;
   label: string;
-  category: "momentum" | "mean_reversion" | "ml";
+  category: "momentum" | "mean_reversion" | "ml" | "ict";
   description: string;
   params: ParamSpec[];
 };
@@ -33,7 +33,8 @@ export type StrategyVersion = {
   params: Record<string, number>;
   code: string;
   universe: string[];
-  rebalance: "daily" | "weekly" | "monthly";
+  timeframe: string;
+  rebalance: "every_bar" | "daily" | "weekly" | "monthly";
   position_mode: "long_top" | "long_short" | "signal_weight";
   top_n: number;
   slippage: Record<string, number>;

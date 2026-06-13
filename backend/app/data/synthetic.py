@@ -12,9 +12,15 @@ from datetime import date
 import numpy as np
 import pandas as pd
 
+from .timeframes import bars_per_day, is_intraday, normalize
 from .universe import UNIVERSE
 
 START_DATE = date(2010, 1, 4)
+
+# How far back synthetic intraday history runs per timeframe — mirrors real
+# intraday data availability (you rarely get years of 1-minute bars) and keeps
+# the generated arrays small.
+_INTRADAY_CAP_DAYS = {"1m": 40, "5m": 180, "15m": 365, "1h": 750}
 
 # Regime schedule (applies to the shared market factor): (year-fraction length, drift mult, vol mult)
 _REGIMES = [
@@ -24,7 +30,10 @@ _REGIMES = [
 ]
 
 _cache: dict[str, pd.DataFrame] = {}
+_intraday_cache: dict[tuple[str, str], pd.DataFrame] = {}
 _dates_cache: pd.DatetimeIndex | None = None
+
+_STEP_MIN = {"1m": 1, "5m": 5, "15m": 15, "1h": 60}
 
 
 def trading_days() -> pd.DatetimeIndex:
@@ -48,7 +57,15 @@ def _regime_multipliers(n: int) -> tuple[np.ndarray, np.ndarray]:
     return drift, vol
 
 
-def get_ohlcv(symbol: str) -> pd.DataFrame:
+def get_ohlcv(symbol: str, timeframe: str = "1d") -> pd.DataFrame:
+    """OHLCV DataFrame: daily (index=date) or intraday (index=datetime)."""
+    tf = normalize(timeframe)
+    if is_intraday(tf):
+        return _intraday(symbol, tf)
+    return _daily(symbol)
+
+
+def _daily(symbol: str) -> pd.DataFrame:
     """Daily OHLCV DataFrame indexed by date: open, high, low, close, volume."""
     if symbol in _cache:
         return _cache[symbol]
@@ -89,6 +106,53 @@ def get_ohlcv(symbol: str) -> pd.DataFrame:
     )
     _cache[symbol] = df
     return df
+
+
+def _intraday(symbol: str, tf: str) -> pd.DataFrame:
+    """Generate intraday OHLCV by walking a Brownian bridge within each session,
+    anchored to the deterministic daily close path. Deterministic per
+    (symbol, timeframe); capped to a recent span (see _INTRADAY_CAP_DAYS)."""
+    key = (symbol, tf)
+    if key in _intraday_cache:
+        return _intraday_cache[key]
+
+    daily = _daily(symbol)
+    cap = _INTRADAY_CAP_DAYS[tf]
+    step = _STEP_MIN[tf]
+    sigma = 0.0007 * np.sqrt(step)  # per-bar log-vol
+    days = daily.index[-cap:]
+    first_pos = len(daily) - len(days)
+    prev_close = float(daily["close"].iloc[first_pos - 1]) if first_pos > 0 else float(daily["open"].iloc[0])
+
+    rng = np.random.default_rng(abs(hash(f"intra:{symbol}:{tf}")) % (2**32))
+    frames: list[pd.DataFrame] = []
+    for d in days:
+        ts = pd.date_range(d + pd.Timedelta(hours=9, minutes=30), d + pd.Timedelta(hours=15, minutes=59, seconds=59), freq=f"{step}min")
+        n = len(ts)
+        if n == 0:
+            continue
+        day_close = float(daily.at[d, "close"])
+        walk = np.cumsum(rng.normal(0, sigma, n))
+        drift = np.linspace(0, 1, n)
+        # Brownian bridge: subtract the realized endpoint, add the target move so
+        # the last bar lands exactly on the day's close (no intraday lookahead —
+        # this is generation, not a signal).
+        target = np.log(day_close / prev_close)
+        logpath = np.log(prev_close) + (walk - drift * walk[-1]) + drift * target
+        close = np.exp(logpath)
+        open_ = np.empty(n)
+        open_[0] = prev_close
+        open_[1:] = close[:-1]
+        noise = np.abs(rng.normal(0, 0.0006 * np.sqrt(step), n)) + 0.0002
+        high = np.maximum(open_, close) * (1 + noise)
+        low = np.minimum(open_, close) * (1 - noise)
+        volume = (float(daily.at[d, "volume"]) / n * rng.lognormal(0, 0.3, n)).astype(np.int64)
+        frames.append(pd.DataFrame({"open": open_, "high": high, "low": low, "close": close, "volume": volume}, index=ts))
+        prev_close = float(close[-1])
+
+    out = pd.concat(frames) if frames else daily.iloc[:0]
+    _intraday_cache[key] = out
+    return out
 
 
 def latest_close(symbol: str) -> float:
