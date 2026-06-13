@@ -1,14 +1,17 @@
 "use client";
 
-// Strategy Builder: signal picker → parameter sliders → universe → execution
-// settings → run. Custom signals get a CodeMirror editor (Python).
+// Strategy Builder. Reads top-to-bottom as a workflow: pick a signal (left
+// rail) → see what it does + tune it → choose tickers → set execution → name
+// it and run. Custom signals swap the params card for a CodeMirror editor.
 
 import { python } from "@codemirror/lang-python";
 import CodeMirror from "@uiw/react-codemirror";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
-import { Button, ErrorNote, Field, Panel, Progress, SelectField } from "@/components/ui";
+import { SignalPreview } from "@/components/build/SignalPreview";
+import { FIELD_HELP, PARAM_HELP } from "@/components/build/copy";
+import { Badge, Button, ErrorNote, Field, InfoTip, Panel, Progress, SelectField } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import type { ParamSpec, SignalMeta, Strategy, UniverseEntry } from "@/lib/types";
 
@@ -98,8 +101,19 @@ function BuilderInner() {
   }, [meta, custom]);
 
   function toggleSymbol(sym: string) {
-    setSymbols((prev) => (prev.includes(sym) ? prev.filter((s) => s !== sym) : [...prev, sym]));
+    setSymbols((prev) => {
+      const next = prev.includes(sym) ? prev.filter((s) => s !== sym) : [...prev, sym];
+      // "assets to hold" can't exceed what's selected — shrink it to fit
+      if (next.length > 0) setTopN((t) => Math.min(t, next.length));
+      return next;
+    });
   }
+
+  const tickersBySector = useMemo(() => {
+    const g: Record<string, UniverseEntry[]> = {};
+    for (const u of universe) (g[u.sector] ??= []).push(u);
+    return g;
+  }, [universe]);
 
   async function runBacktest() {
     setError("");
@@ -108,7 +122,7 @@ function BuilderInner() {
       return;
     }
     if (symbols.length === 0) {
-      setError("Pick at least one symbol for the universe.");
+      setError("Pick at least one ticker to test on.");
       return;
     }
     const versionBody = {
@@ -173,6 +187,21 @@ function BuilderInner() {
     return g;
   }, [catalog]);
 
+  const pickerButton = (key: string, label: string, active: boolean, onClick: () => void) => (
+    <button
+      key={key}
+      onClick={onClick}
+      className={`press w-full rounded-[3px] border px-2.5 py-1.5 text-left text-xs ${
+        active
+          ? "border-[var(--color-accent)] text-[var(--color-accent)]"
+          : "border-[var(--color-rule)] text-[var(--color-muted)] hover:border-[var(--color-rule)] hover:text-[var(--color-ink)]"
+      }`}
+      style={{ fontFamily: "var(--font-mono)" }}
+    >
+      {label}
+    </button>
+  );
+
   return (
     <div className="mx-auto flex max-w-[80rem] flex-col gap-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -181,96 +210,36 @@ function BuilderInner() {
           <p className="text-sm text-[var(--color-neutral)]">
             {existing
               ? `v${(existing.latest_version?.version_number ?? 0) + 1} will be saved when you run.`
-              : "Configure a signal, then run it against history. Saving happens on run."}
+              : "Pick a signal, tune it, choose your tickers — then name it and run. Saving happens on run."}
           </p>
         </div>
       </div>
 
       {error && <ErrorNote>{error}</ErrorNote>}
 
-      <div className="grid gap-5 lg:grid-cols-[340px_1fr]">
-        {/* ── left rail: identity + signal picker ─────────────────────────── */}
-        <div className="flex flex-col gap-5">
-          <Panel title="strategy">
+      <div className="grid gap-5 lg:grid-cols-[260px_1fr]">
+        {/* ── left rail: signal picker (the menu — where you start) ───────── */}
+        <div className="lg:sticky lg:top-4 lg:self-start">
+          <Panel title="1 · choose a signal">
             <div className="flex flex-col gap-4">
-              <Field label="Name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Fast cross, liquid eight" disabled={!!existing} />
-              <Field label="Notes" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="what's the hypothesis?" disabled={!!existing} />
-            </div>
-          </Panel>
-
-          <Panel title="signal">
-            <div className="flex flex-col gap-3">
               {Object.entries(grouped).map(([cat, sigs]) => (
-                <div key={cat}>
-                  <p className="mb-1.5 text-[11px] uppercase tracking-[0.1em] text-[var(--color-neutral)]">{CATEGORY_LABEL[cat]}</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {sigs.map((s) => {
-                      const active = !custom && signalType === s.key;
-                      return (
-                        <button
-                          key={s.key}
-                          onClick={() => {
-                            setCustom(false);
-                            setSignalType(s.key);
-                          }}
-                          className={`press rounded-[3px] border px-2 py-1 text-xs ${
-                            active
-                              ? "border-[var(--color-accent)] text-[var(--color-accent)]"
-                              : "border-[var(--color-rule)] text-[var(--color-muted)] hover:text-[var(--color-ink)]"
-                          }`}
-                          style={{ fontFamily: "var(--font-mono)" }}
-                          title={s.description}
-                        >
-                          {s.label}
-                        </button>
-                      );
-                    })}
-                  </div>
+                <div key={cat} className="flex flex-col gap-1.5">
+                  <p className="text-[11px] uppercase tracking-[0.1em] text-[var(--color-neutral)]">{CATEGORY_LABEL[cat]}</p>
+                  {sigs.map((s) => pickerButton(s.key, s.label, !custom && signalType === s.key, () => {
+                    setCustom(false);
+                    setSignalType(s.key);
+                  }))}
                 </div>
               ))}
-              <div>
-                <p className="mb-1.5 text-[11px] uppercase tracking-[0.1em] text-[var(--color-neutral)]">Custom</p>
-                <button
-                  onClick={() => setCustom(true)}
-                  className={`press rounded-[3px] border px-2 py-1 text-xs ${
-                    custom
-                      ? "border-[var(--color-accent)] text-[var(--color-accent)]"
-                      : "border-[var(--color-rule)] text-[var(--color-muted)] hover:text-[var(--color-ink)]"
-                  }`}
-                  style={{ fontFamily: "var(--font-mono)" }}
-                >
-                  Write Python
-                </button>
+              <div className="flex flex-col gap-1.5">
+                <p className="text-[11px] uppercase tracking-[0.1em] text-[var(--color-neutral)]">Custom</p>
+                {pickerButton("custom", "Write Python", custom, () => setCustom(true))}
               </div>
-              {!custom && meta && <p className="text-xs leading-relaxed text-[var(--color-neutral)]">{meta.description}</p>}
-            </div>
-          </Panel>
-
-          <Panel title="universe" right={<span className="text-xs text-[var(--color-neutral)]">{symbols.length} selected</span>}>
-            <div className="flex max-h-56 flex-wrap content-start gap-1.5 overflow-y-auto">
-              {universe.map((u) => {
-                const active = symbols.includes(u.symbol);
-                return (
-                  <button
-                    key={u.symbol}
-                    onClick={() => toggleSymbol(u.symbol)}
-                    className={`press tnum rounded-[3px] border px-2 py-1 text-xs ${
-                      active
-                        ? "border-[var(--color-accent)] text-[var(--color-accent)]"
-                        : "border-[var(--color-rule)] text-[var(--color-muted)] hover:text-[var(--color-ink)]"
-                    }`}
-                    style={{ fontFamily: "var(--font-mono)" }}
-                    title={`${u.name} · ${u.sector}`}
-                  >
-                    {u.symbol}
-                  </button>
-                );
-              })}
             </div>
           </Panel>
         </div>
 
-        {/* ── right: params/code + execution + run ────────────────────────── */}
+        {/* ── main column: explain → tune → tickers → execution → run ─────── */}
         <div className="flex flex-col gap-5">
           {custom ? (
             <Panel title="signal code · python">
@@ -288,35 +257,56 @@ function BuilderInner() {
               </p>
             </Panel>
           ) : (
-            <Panel title="parameters">
+            meta && (
+              <Panel title="what this signal does">
+                <div className="grid gap-5 sm:grid-cols-[1fr_320px] sm:items-start">
+                  <div className="flex flex-col gap-2.5">
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-[var(--text-md)] leading-tight text-[var(--color-ink)]">{meta.label}</h2>
+                      <Badge tone="accent">{CATEGORY_LABEL[meta.category]}</Badge>
+                    </div>
+                    <p className="text-sm leading-relaxed text-[var(--color-muted)]">{meta.description}</p>
+                  </div>
+                  <SignalPreview signalKey={meta.key} />
+                </div>
+              </Panel>
+            )
+          )}
+
+          {!custom && (
+            <Panel title="2 · parameters">
               {meta && meta.params.length > 0 ? (
                 <div className="grid gap-5 sm:grid-cols-2">
-                  {meta.params.map((p: ParamSpec) => (
-                    <div key={p.name} className="flex flex-col gap-1.5">
-                      <div className="flex items-baseline justify-between">
-                        <label htmlFor={`param-${p.name}`} className="text-xs uppercase tracking-[0.08em] text-[var(--color-neutral)]">
-                          {p.label}
-                        </label>
-                        <span className="tnum text-sm text-[var(--color-accent)]" style={{ fontFamily: "var(--font-mono)" }}>
-                          {params[p.name] ?? p.default}
-                        </span>
+                  {meta.params.map((p: ParamSpec) => {
+                    const help = PARAM_HELP[`${signalType}.${p.name}`];
+                    return (
+                      <div key={p.name} className="flex flex-col gap-1.5">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <label htmlFor={`param-${p.name}`} className="flex items-center gap-1.5 text-xs uppercase tracking-[0.08em] text-[var(--color-neutral)]">
+                            <span>{p.label}</span>
+                            {help && <InfoTip label={`About ${p.label}`}>{help}</InfoTip>}
+                          </label>
+                          <span className="tnum text-sm text-[var(--color-accent)]" style={{ fontFamily: "var(--font-mono)" }}>
+                            {params[p.name] ?? p.default}
+                          </span>
+                        </div>
+                        <input
+                          id={`param-${p.name}`}
+                          type="range"
+                          min={p.min}
+                          max={p.max}
+                          step={p.step}
+                          value={params[p.name] ?? p.default}
+                          onChange={(e) => setParams({ ...params, [p.name]: Number(e.target.value) })}
+                          className="accent-[var(--color-accent)]"
+                        />
+                        <div className="tnum flex justify-between text-[10px] text-[var(--color-neutral)]" style={{ fontFamily: "var(--font-mono)" }}>
+                          <span>{p.min}</span>
+                          <span>{p.max}</span>
+                        </div>
                       </div>
-                      <input
-                        id={`param-${p.name}`}
-                        type="range"
-                        min={p.min}
-                        max={p.max}
-                        step={p.step}
-                        value={params[p.name] ?? p.default}
-                        onChange={(e) => setParams({ ...params, [p.name]: Number(e.target.value) })}
-                        className="accent-[var(--color-accent)]"
-                      />
-                      <div className="tnum flex justify-between text-[10px] text-[var(--color-neutral)]" style={{ fontFamily: "var(--font-mono)" }}>
-                        <span>{p.min}</span>
-                        <span>{p.max}</span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="text-sm text-[var(--color-neutral)]">This signal has no tunable parameters.</p>
@@ -324,12 +314,57 @@ function BuilderInner() {
             </Panel>
           )}
 
-          <Panel title="execution">
+          <Panel
+            title="3 · assets"
+            right={
+              <div className="flex items-center gap-3 text-xs" style={{ fontFamily: "var(--font-mono)" }}>
+                <span className="text-[var(--color-neutral)]">{symbols.length} selected</span>
+                <button onClick={() => setSymbols(universe.map((u) => u.symbol))} className="press text-[var(--color-muted)] hover:text-[var(--color-accent)]">
+                  all
+                </button>
+                <button onClick={() => setSymbols([])} className="press text-[var(--color-muted)] hover:text-[var(--color-accent)]">
+                  none
+                </button>
+              </div>
+            }
+          >
+            <p className="mb-3 text-xs text-[var(--color-neutral)]">
+              The stocks and ETFs the backtest will trade across. Pick a handful or a whole sector — the signal ranks whatever you select.
+            </p>
+            <div className="flex flex-col gap-3">
+              {Object.entries(tickersBySector).map(([sector, entries]) => (
+                <div key={sector} className="flex flex-wrap items-center gap-1.5">
+                  <span className="w-28 shrink-0 text-[11px] uppercase tracking-[0.08em] text-[var(--color-neutral)]">{sector}</span>
+                  {entries.map((u) => {
+                    const active = symbols.includes(u.symbol);
+                    return (
+                      <button
+                        key={u.symbol}
+                        onClick={() => toggleSymbol(u.symbol)}
+                        className={`press tnum rounded-[3px] border px-2 py-1 text-xs ${
+                          active
+                            ? "border-[var(--color-accent)] text-[var(--color-accent)]"
+                            : "border-[var(--color-rule)] text-[var(--color-muted)] hover:text-[var(--color-ink)]"
+                        }`}
+                        style={{ fontFamily: "var(--font-mono)" }}
+                        title={u.name}
+                      >
+                        {u.symbol}
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          </Panel>
+
+          <Panel title="4 · execution">
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               <SelectField
                 label="Rebalance"
                 value={rebalance}
                 onChange={setRebalance}
+                info={FIELD_HELP.rebalance}
                 options={[
                   { value: "daily", label: "Daily" },
                   { value: "weekly", label: "Weekly" },
@@ -340,19 +375,29 @@ function BuilderInner() {
                 label="Positioning"
                 value={positionMode}
                 onChange={setPositionMode}
+                info={FIELD_HELP.positioning}
                 options={[
-                  { value: "long_top", label: "Long top N" },
-                  { value: "long_short", label: "Long/short N" },
-                  { value: "signal_weight", label: "Signal-weighted" },
+                  { value: "long_top", label: "Buy best assets" },
+                  { value: "long_short", label: "Buy best, short worst" },
+                  { value: "signal_weight", label: "Weight by signal" },
                 ]}
               />
-              <Field label="Top N" type="number" min={1} max={20} value={topN} onChange={(e) => setTopN(Number(e.target.value))} />
+              <Field
+                label="Assets to hold"
+                type="number"
+                min={1}
+                max={Math.max(1, symbols.length)}
+                value={topN}
+                onChange={(e) => setTopN(Math.min(Number(e.target.value), Math.max(1, symbols.length)))}
+                info={FIELD_HELP.topN}
+              />
               <Field
                 label="Slippage · $/share"
                 type="number"
                 step="0.001"
                 value={slip.fixed_per_share}
                 onChange={(e) => setSlip({ ...slip, fixed_per_share: Number(e.target.value) })}
+                info={FIELD_HELP.slipFixed}
               />
               <Field
                 label="Slippage · bps"
@@ -360,6 +405,7 @@ function BuilderInner() {
                 step="0.5"
                 value={slip.pct_bps}
                 onChange={(e) => setSlip({ ...slip, pct_bps: Number(e.target.value) })}
+                info={FIELD_HELP.slipBps}
               />
               <Field
                 label="Impact k (√ model)"
@@ -367,6 +413,7 @@ function BuilderInner() {
                 step="0.05"
                 value={slip.impact_k}
                 onChange={(e) => setSlip({ ...slip, impact_k: Number(e.target.value) })}
+                info={FIELD_HELP.impactK}
               />
             </div>
           </Panel>
@@ -383,6 +430,7 @@ function BuilderInner() {
             {mlFilter.enabled ? (
               <div className="grid gap-4 sm:grid-cols-3">
                 <SelectField label="Model" value={mlFilter.model} onChange={(v) => setMlFilter({ ...mlFilter, model: v })}
+                  info={FIELD_HELP.mlModel}
                   options={[
                     { value: "logistic", label: "Logistic" },
                     { value: "random_forest", label: "Random forest" },
@@ -390,14 +438,16 @@ function BuilderInner() {
                     { value: "xgboost", label: "XGBoost" },
                   ]} />
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs uppercase tracking-[0.08em] text-[var(--color-neutral)]">
-                    Min win probability: <span className="text-[var(--color-accent)]">{mlFilter.threshold.toFixed(2)}</span>
+                  <label className="flex items-center gap-1.5 text-xs uppercase tracking-[0.08em] text-[var(--color-neutral)]">
+                    <span>Min win probability: <span className="text-[var(--color-accent)]">{mlFilter.threshold.toFixed(2)}</span></span>
+                    <InfoTip label="About min win probability">{FIELD_HELP.mlThreshold}</InfoTip>
                   </label>
                   <input type="range" min={0.4} max={0.8} step={0.01} value={mlFilter.threshold}
                     onChange={(e) => setMlFilter({ ...mlFilter, threshold: Number(e.target.value) })}
                     className="accent-[var(--color-accent)]" />
                 </div>
                 <SelectField label="Retrain cadence" value={String(mlFilter.retrain_days)}
+                  info={FIELD_HELP.mlRetrain}
                   onChange={(v) => setMlFilter({ ...mlFilter, retrain_days: Number(v) })}
                   options={[{ value: "21", label: "Monthly" }, { value: "63", label: "Quarterly" }, { value: "126", label: "Semiannual" }]} />
                 <p className="text-xs text-[var(--color-neutral)] sm:col-span-3">
@@ -411,14 +461,29 @@ function BuilderInner() {
             )}
           </Panel>
 
-          <Panel title="backtest window">
-            <div className="grid items-end gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Field label="Start" type="date" value={start} onChange={(e) => setDates({ start: e.target.value, end })} />
-              <Field label="End" type="date" value={end} onChange={(e) => setDates({ start, end: e.target.value })} />
-              <Field label="Initial capital" type="number" step="1000" value={capital} onChange={(e) => setCapital(Number(e.target.value))} />
-              <Button onClick={runBacktest} loading={!!running} className="min-h-[38px]">
-                {running ? "Running…" : "Run backtest"}
-              </Button>
+          {/* ── final step: name it (required) + window + run ──────────────── */}
+          <Panel title="5 · name & run">
+            <div className="flex flex-col gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="Strategy name"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Fast cross, liquid eight"
+                  disabled={!!existing}
+                  hint={existing ? undefined : "Required — this is how you'll find it in your library."}
+                />
+                <Field label="Notes" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="what's the hypothesis?" disabled={!!existing} info="Optional. A short note on the idea you're testing." />
+              </div>
+              <div className="grid items-end gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <Field label="Start" type="date" value={start} onChange={(e) => setDates({ start: e.target.value, end })} />
+                <Field label="End" type="date" value={end} onChange={(e) => setDates({ start, end: e.target.value })} />
+                <Field label="Initial capital" type="number" step="1000" value={capital} onChange={(e) => setCapital(Number(e.target.value))} info={FIELD_HELP.capital} />
+                <Button onClick={runBacktest} loading={!!running} className="min-h-[38px]">
+                  {running ? "Running…" : "Run backtest"}
+                </Button>
+              </div>
             </div>
             {running && (
               <div className="mt-4 flex items-center gap-3">

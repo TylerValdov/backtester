@@ -56,17 +56,21 @@ export function Spinner({ size = 16 }: { size?: number }) {
 
 // ── Inputs ────────────────────────────────────────────────────────────────
 
-type FieldProps = InputHTMLAttributes<HTMLInputElement> & { label: string; error?: string; hint?: string };
+type FieldProps = InputHTMLAttributes<HTMLInputElement> & { label: string; error?: string; hint?: string; info?: ReactNode; required?: boolean };
 
 export const Field = forwardRef<HTMLInputElement, FieldProps>(function Field(
-  { label, error, hint, id, className = "", ...rest },
+  { label, error, hint, info, required, id, className = "", ...rest },
   ref,
 ) {
   const fieldId = id ?? `f-${label.replace(/\W+/g, "-").toLowerCase()}`;
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={fieldId} className="text-xs uppercase tracking-[0.08em] text-[var(--color-neutral)]">
-        {label}
+      <label htmlFor={fieldId} className="flex items-center gap-1.5 text-xs uppercase tracking-[0.08em] text-[var(--color-neutral)]">
+        <span>
+          {label}
+          {required && <span className="ml-1 text-[var(--color-accent)]" aria-hidden>*</span>}
+        </span>
+        {info && <InfoTip label={`About ${label}`}>{info}</InfoTip>}
       </label>
       <input
         ref={ref}
@@ -91,17 +95,20 @@ export function SelectField({
   value,
   onChange,
   options,
+  info,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   options: { value: string; label: string }[];
+  info?: ReactNode;
 }) {
   const fieldId = `s-${label.replace(/\W+/g, "-").toLowerCase()}`;
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={fieldId} className="text-xs uppercase tracking-[0.08em] text-[var(--color-neutral)]">
-        {label}
+      <label htmlFor={fieldId} className="flex items-center gap-1.5 text-xs uppercase tracking-[0.08em] text-[var(--color-neutral)]">
+        <span>{label}</span>
+        {info && <InfoTip label={`About ${label}`}>{info}</InfoTip>}
       </label>
       <select
         id={fieldId}
@@ -116,6 +123,32 @@ export function SelectField({
         ))}
       </select>
     </div>
+  );
+}
+
+// ── InfoTip ───────────────────────────────────────────────────────────────
+// Accessible help popover: a small "?" that reveals a tip on hover OR keyboard
+// focus. Origin below the trigger, exponential ease-out, no perpetual motion.
+
+export function InfoTip({ children, label = "More information" }: { children: ReactNode; label?: string }) {
+  return (
+    <span className="group relative inline-flex align-middle">
+      <button
+        type="button"
+        aria-label={label}
+        className="press grid h-4 w-4 place-items-center rounded-full border border-[var(--color-rule)] text-[9px] font-medium leading-none text-[var(--color-neutral)] transition-colors hover:border-[var(--color-accent)] hover:text-[var(--color-accent)] focus-visible:border-[var(--color-accent)] focus-visible:text-[var(--color-accent)] focus-visible:outline-none"
+        style={{ fontFamily: "var(--font-mono)" }}
+      >
+        ?
+      </button>
+      <span
+        role="tooltip"
+        className="invisible pointer-events-none absolute bottom-full left-1/2 z-[var(--z-tooltip)] mb-2 w-56 -translate-x-1/2 translate-y-1 rounded-[5px] border border-[var(--color-rule)] bg-[var(--color-paper-3)] px-2.5 py-2 text-[11px] normal-case leading-relaxed tracking-normal text-[var(--color-muted)] opacity-0 shadow-lg transition-[opacity,transform] duration-150 ease-[var(--ease-out)] group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100"
+        style={{ fontFamily: "var(--font-body)" }}
+      >
+        {children}
+      </span>
+    </span>
   );
 }
 

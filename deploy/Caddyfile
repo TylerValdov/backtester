@@ -1,0 +1,21 @@
+# Single public entry point. Serving the frontend and backend under ONE origin
+# keeps the session cookie first-party (no SameSite=None / CORS gymnastics) and
+# proxies the WebSocket upgrade, which Next.js rewrites can't do.
+#
+# {$DOMAIN} controls TLS: a real hostname (app.example.com) makes Caddy fetch a
+# Let's Encrypt cert automatically; ":80" serves plain HTTP for local testing.
+
+{$DOMAIN::80} {
+	# Backend API and WebSocket → FastAPI. reverse_proxy upgrades ws automatically.
+	@backend path /api/* /ws/*
+	handle @backend {
+		reverse_proxy backend:8000
+	}
+
+	# Everything else → Next.js server.
+	handle {
+		reverse_proxy frontend:3000
+	}
+
+	encode gzip
+}

@@ -8,3 +8,13 @@ backend/models/*.pkl
 .pytest_cache/
 /*.png
 .gitmsg.tmp
+.hallmark
+startup.sh
+
+# Deployment secrets + local DB artifacts
+/.env
+*.db
+backend/_alembic_tmp.db
+backend/_verify.db
+frontend/.env.local
+frontend/.next/

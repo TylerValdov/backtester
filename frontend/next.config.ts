@@ -6,6 +6,8 @@ import type { NextConfig } from "next";
 const BACKEND = process.env.BACKEND_ORIGIN ?? "http://localhost:8000";
 
 const nextConfig: NextConfig = {
+  // Self-contained server bundle for a slim production Docker image.
+  output: "standalone",
   async rewrites() {
     return [{ source: "/api/:path*", destination: `${BACKEND}/api/:path*` }];
   },

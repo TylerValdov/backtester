@@ -8,7 +8,14 @@
 
 import { api } from "./api";
 
-const WS_BASE = process.env.NEXT_PUBLIC_WS_ORIGIN ?? "ws://localhost:8000";
+// In production the WebSocket is proxied on the same domain (/ws/* via the
+// reverse proxy), so default to same-origin. Override with NEXT_PUBLIC_WS_ORIGIN
+// for split-host setups; falls back to the dev backend port server-side.
+const WS_BASE =
+  process.env.NEXT_PUBLIC_WS_ORIGIN ??
+  (typeof window !== "undefined"
+    ? `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}`
+    : "ws://localhost:8000");
 
 export async function openPaperSocket(sessionId: string): Promise<WebSocket> {
   let tokenPart = "";
