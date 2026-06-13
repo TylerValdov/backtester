@@ -52,6 +52,18 @@ class Settings(BaseSettings):
     free_history_years: int = 2
 
 
+    @property
+    def sqlalchemy_url(self) -> str:
+        """DB URL with an explicit driver. Managed hosts (Railway/Heroku/Render)
+        hand out `postgresql://` or `postgres://`, which SQLAlchemy maps to the
+        unbundled psycopg2 — we ship psycopg3, so force the `+psycopg` dialect."""
+        url = self.database_url
+        for prefix in ("postgresql://", "postgres://"):
+            if url.startswith(prefix):
+                return "postgresql+psycopg://" + url[len(prefix):]
+        return url
+
+
 @lru_cache
 def get_settings() -> Settings:
     return Settings()

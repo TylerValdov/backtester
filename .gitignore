@@ -10,6 +10,7 @@ backend/models/*.pkl
 .gitmsg.tmp
 .hallmark
 startup.sh
+docs/
 
 # Deployment secrets + local DB artifacts
 /.env

@@ -12,10 +12,11 @@ from .config import get_settings
 
 settings = get_settings()
 
-connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
+db_url = settings.sqlalchemy_url
+connect_args = {"check_same_thread": False} if db_url.startswith("sqlite") else {}
 # pool_pre_ping recycles connections dropped by the DB/proxy (matters on managed
 # Postgres, which closes idle connections); no-op cost on SQLite.
-engine = create_engine(settings.database_url, connect_args=connect_args, pool_pre_ping=True)
+engine = create_engine(db_url, connect_args=connect_args, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
