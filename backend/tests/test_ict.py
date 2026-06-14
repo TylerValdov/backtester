@@ -1,9 +1,12 @@
+import json
+
 import numpy as np
 import pandas as pd
 
 from app.backtest.runner import run_backtest
 from app.ict.engine import FvgConfig, run_ict_backtest, simulate_symbol
 from app.ict.fvg import detect_gap
+from app.serialize import json_safe
 
 
 def test_detect_bullish_and_bearish_gap():
@@ -104,3 +107,15 @@ def test_runner_dispatches_ict():
     r = run_backtest(VICT(), "2018-06-01", "2020-06-01", 100_000.0)
     assert r["config"]["position_mode"] == "ict_fvg"
     assert r["config"]["rebalance"] == "event"
+
+
+def test_json_safe_replaces_non_finite():
+    out = json_safe({"a": float("nan"), "b": float("inf"), "c": [1.0, float("-inf")], "d": "x"})
+    assert out == {"a": None, "b": None, "c": [1.0, None], "d": "x"}
+
+
+def test_ict_payload_is_strict_json():
+    # Postgres JSON rejects NaN/Infinity — the payload must serialize with
+    # allow_nan=False (raises otherwise).
+    r = run_ict_backtest(VICT(), "2018-06-01", "2021-06-01", 100_000.0)
+    json.dumps(r, allow_nan=False)

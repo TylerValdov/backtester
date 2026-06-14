@@ -42,10 +42,13 @@ def drawdown_series(equity: pd.Series) -> pd.Series:
 def cagr(equity: pd.Series, ppy: float = TRADING_DAYS) -> float:
     if len(equity) < 2 or equity.iloc[0] <= 0:
         return 0.0
+    final = equity.iloc[-1]
+    if final <= 0:
+        return -1.0  # total loss; a negative base would give a complex/NaN root
     years = len(equity) / ppy
     if years <= 0:
         return 0.0
-    return float((equity.iloc[-1] / equity.iloc[0]) ** (1 / years) - 1)
+    return float((final / equity.iloc[0]) ** (1 / years) - 1)
 
 
 def volatility(returns: pd.Series, ppy: float = TRADING_DAYS) -> float:

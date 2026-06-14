@@ -19,6 +19,7 @@ import pandas as pd
 
 from ..data import BENCHMARK, SYMBOLS, get_provider, is_intraday, normalize, periods_per_year
 from ..risk import SlippageConfig, apply_slippage, drawdown_series, rolling_sharpe, summarize
+from ..serialize import json_safe
 from ..signals import build_signal
 from .portfolio import Portfolio
 
@@ -237,4 +238,4 @@ def run_backtest(
         }
     if model_diag:
         payload["ml_model"] = model_diag
-    return payload
+    return json_safe(payload)

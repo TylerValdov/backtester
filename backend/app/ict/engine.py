@@ -16,6 +16,7 @@ import pandas as pd
 
 from ..data import BENCHMARK, SYMBOLS, get_provider, is_intraday, normalize, periods_per_year
 from ..risk import drawdown_series, rolling_sharpe, summarize
+from ..serialize import json_safe
 from .fvg import Gap, detect_gap
 
 MAX_TRADES_IN_PAYLOAD = 1000
@@ -241,7 +242,7 @@ def run_ict_backtest(version, start_date, end_date, initial_capital, on_progress
     rs = rolling_sharpe(equity.pct_change().fillna(0.0), 63, ppy=ppy)
     label_fmt = "%Y-%m-%d %H:%M" if intraday else "%Y-%m-%d"
 
-    return {
+    return json_safe({
         "dates": [d.strftime(label_fmt) for d in common_idx],
         "equity": [round(v, 2) for v in equity.tolist()],
         "benchmark": [round(v, 2) for v in benchmark.tolist()],
@@ -266,4 +267,4 @@ def run_ict_backtest(version, start_date, end_date, initial_capital, on_progress
             "end": end_date,
             "initial_capital": initial_capital,
         },
-    }
+    })
