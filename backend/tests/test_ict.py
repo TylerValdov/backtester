@@ -119,3 +119,12 @@ def test_ict_payload_is_strict_json():
     # allow_nan=False (raises otherwise).
     r = run_ict_backtest(VICT(), "2018-06-01", "2021-06-01", 100_000.0)
     json.dumps(r, allow_nan=False)
+
+
+def test_db_json_serializer_strips_non_finite():
+    # the engine-level serializer is the catch-all that protects every JSON write
+    from app.db import _json_serializer
+
+    s = _json_serializer({"x": float("nan"), "y": [float("inf"), 1.0]})
+    assert "NaN" not in s and "Infinity" not in s
+    json.loads(s)  # valid strict JSON
